@@ -1,14 +1,9 @@
-// Glue entre xterm.js e o backend Tauri.
-// Toda a lógica de negócio vive no Rust; aqui só adaptamos APIs do browser:
-// - instancia o Terminal + FitAddon
-// - repassa entrada/resize do usuário via commands Tauri
-// - recebe a saída da sessão SSH por um tauri Channel e escreve no terminal
+// Browser-side adapter between xterm.js and the Tauri SSH commands.
 import { Terminal } from "/vendor/xterm/xterm.mjs";
 import { FitAddon } from "/vendor/xterm/addon-fit.mjs";
 
 const core = () => window.__TAURI__.core;
 
-// base64 → Uint8Array (a saída SSH trafega em base64 para preservar bytes brutos)
 function b64ToBytes(b64) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -17,11 +12,11 @@ function b64ToBytes(b64) {
 }
 
 /**
- * Cria o terminal, conecta via SSH e faz a ponte de I/O.
- * @param {string} containerId  id do <div> onde o terminal é montado
- * @param {string} connectionId id da conexão (backend)
- * @param {(status:string, detail?:string)=>void} onStatus callback de estado
- * @returns handle com dispose()/disconnect()
+ * Creates the terminal, starts the SSH session, and bridges terminal I/O.
+ * @param {string} containerId terminal container element id
+ * @param {string} connectionId backend connection id
+ * @param {(status:string, detail?:string)=>void} onStatus status callback
+ * @returns handle with dispose()/disconnect()
  */
 export async function startTerminal(containerId, connectionId, onStatus) {
   const container = document.getElementById(containerId);
@@ -39,13 +34,12 @@ export async function startTerminal(containerId, connectionId, onStatus) {
   term.open(container);
   fit.fit();
 
-  // O session_id é gerado AQUI e passado ao backend. Assim a UI já o conhece
-  // durante o prompt de host key (a chamada ssh_connect fica pendente
-  // aguardando a confirmação, então não podemos depender do seu retorno).
+  // The frontend owns the session id so it can answer host-key prompts while
+  // ssh_connect is still pending.
   const sessionId = crypto.randomUUID();
   let closed = false;
 
-  // Canal Tauri: recebe eventos ordenados do backend (saída, prompt, close).
+  // Tauri Channel preserves SSH output and lifecycle event ordering.
   const Channel = core().Channel;
   const channel = new Channel();
   channel.onmessage = (msg) => {
@@ -71,13 +65,11 @@ export async function startTerminal(containerId, connectionId, onStatus) {
 
   const { cols, rows } = term;
 
-  // Entrada do usuário → backend
   term.onData((data) => {
     if (closed) return;
     core().invoke("ssh_send_data", { sessionId, data });
   });
 
-  // Resize (debounced) → FitAddon + backend
   let resizeTimer = null;
   const doResize = () => {
     fit.fit();
@@ -91,9 +83,7 @@ export async function startTerminal(containerId, connectionId, onStatus) {
   });
   observer.observe(container);
 
-  // Dispara a conexão. A promise fica pendente durante o prompt de host key
-  // (o backend aguarda confirm_host_key), por isso o sessionId já foi gerado
-  // acima e não depende deste retorno.
+  // This promise can stay pending while the backend waits for TOFU confirmation.
   core()
     .invoke("ssh_connect", { sessionId, connectionId, cols, rows, onEvent: channel })
     .then(() => onStatus("connected"))
