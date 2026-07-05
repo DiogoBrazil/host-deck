@@ -10,8 +10,7 @@ use crate::ssh::client::TofuHandler;
 use crate::ssh::events::TerminalEvent;
 use crate::ssh::registry::SessionInput;
 
-/// Abre PTY + shell e faz a ponte bidirecional entre a sessão SSH e o
-/// frontend (saída via `Channel`, entrada via `mpsc`).
+/// Opens a PTY-backed shell and bridges SSH I/O to the frontend.
 pub async fn open_shell_and_bridge(
     handle: Handle<TofuHandler>,
     cols: u32,
@@ -30,7 +29,7 @@ pub async fn open_shell_and_bridge(
         .await?;
     channel.request_shell(true).await?;
 
-    // Bridge roda em task própria; o command `ssh_connect` retorna em seguida.
+    // The bridge runs in its own task so `ssh_connect` can return immediately.
     tauri::async_runtime::spawn(async move {
         let reason = loop {
             tokio::select! {
@@ -63,7 +62,6 @@ pub async fn open_shell_and_bridge(
                         });
                     }
                     Some(ChannelMsg::ExitStatus { exit_status }) => {
-                        // aguarda Close/Eof subsequente; registra o status
                         log::info!("sessão encerrou com status {exit_status}");
                     }
                     Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {

@@ -1,8 +1,8 @@
 use serde::Serialize;
 
-/// Eventos enviados ao frontend pelo `tauri::ipc::Channel` da sessão.
-/// A saída do terminal vai em base64 para preservar bytes brutos
-/// (sequências ANSI podem quebrar UTF-8 em fronteiras de chunk).
+/// Events streamed to the frontend over the session `tauri::ipc::Channel`.
+///
+/// Terminal output is base64 encoded to preserve raw bytes across chunk boundaries.
 #[derive(Clone, Serialize)]
 #[serde(
     tag = "event",
@@ -11,15 +11,15 @@ use serde::Serialize;
     rename_all_fields = "camelCase"
 )]
 pub enum TerminalEvent {
-    /// Sessão estabelecida; terminal pronto.
+    /// Session established; the terminal is ready.
     Connected { session_id: String },
-    /// Saída do servidor (base64 de bytes brutos).
+    /// Server output encoded as base64 raw bytes.
     Output { data: String },
-    /// Primeira conexão a este host: aguarda confirmação do fingerprint.
+    /// First connection to this host; fingerprint confirmation is required.
     HostKeyPrompt { fingerprint: String, key_type: String },
-    /// Sessão encerrada (pelo servidor ou pelo usuário).
+    /// Session closed by the server or the user.
     Closed { reason: String },
-    /// Erro assíncrono após a conexão estabelecida.
+    /// Asynchronous error after the session has started.
     Error { message: String },
 }
 
@@ -29,7 +29,7 @@ mod tests {
 
     #[test]
     fn serializes_variant_and_fields_as_camel_case() {
-        // O frontend depende EXATAMENTE destes nomes (event/data/campos).
+        // The frontend depends on these exact serialized names.
         let ev = TerminalEvent::HostKeyPrompt {
             fingerprint: "SHA256:abc".into(),
             key_type: "ssh-ed25519".into(),

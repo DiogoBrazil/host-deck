@@ -1,8 +1,10 @@
-//! Testes E2E contra um sshd real em container. Suba o servidor antes:
+//! End-to-end SSH tests against a real sshd container.
+//!
 //! docker run -d --name hostdeck-ssh-test -p 127.0.0.1:2222:2222 \
-//!   -e PASSWORD_ACCESS=true -e USER_NAME=tester -e USER_PASSWORD=senha-teste-123 \
+//!   -e PASSWORD_ACCESS=true -e USER_NAME=tester -e USER_PASSWORD=hostdeck-test-password \
 //!   -e PUBLIC_KEY="$(cat test_key.pub)" lscr.io/linuxserver/openssh-server
-//! Depois: cargo test ssh_e2e -- --ignored --test-threads 1
+//!
+//! Then run: cargo test ssh_e2e -- --ignored --test-threads 1
 
 use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
@@ -22,9 +24,9 @@ use crate::ssh::session::open_shell_and_bridge;
 const HOST: &str = "127.0.0.1";
 const PORT: u16 = 2222;
 const USER: &str = "tester";
-const PASSWORD: &str = "senha-teste-123";
+const PASSWORD: &str = "hostdeck-test-password";
 
-/// Channel de teste que acumula os eventos serializados em JSON.
+/// Test channel that collects serialized JSON events.
 fn test_channel() -> (Channel<super::events::TerminalEvent>, std_mpsc::Receiver<String>) {
     let (tx, rx) = std_mpsc::channel::<String>();
     let channel = Channel::new(move |body| {
@@ -45,10 +47,9 @@ fn params_password(password: &str) -> ConnectParams {
     }
 }
 
-/// Confirma automaticamente o fingerprint quando o prompt TOFU chegar.
+/// Automatically accepts the fingerprint when the TOFU prompt arrives.
 fn auto_accept(rx_events: &std_mpsc::Receiver<String>, confirm_tx: oneshot::Sender<bool>) {
     let mut confirm = Some(confirm_tx);
-    // O prompt chega de forma assíncrona durante o connect; aguardamos aqui.
     for _ in 0..100 {
         match rx_events.recv_timeout(Duration::from_millis(200)) {
             Ok(json) if json.contains("hostKeyPrompt") => {
@@ -70,7 +71,6 @@ async fn ssh_e2e_password_shell_roundtrip() {
     let (events, rx_events) = test_channel();
     let (confirm_tx, confirm_rx) = oneshot::channel();
 
-    // TOFU: aceita o fingerprint em thread separada (como o usuário faria).
     let accept_thread = std::thread::spawn({
         let (events2, rx2) = (events.clone(), rx_events);
         move || {
@@ -86,7 +86,6 @@ async fn ssh_e2e_password_shell_roundtrip() {
 
     let rx_events = accept_thread.join().unwrap();
 
-    // Host salvo após aceitar (TOFU)
     let count: u32 = {
         let conn = db.0.lock().unwrap();
         conn.query_row("SELECT COUNT(*) FROM known_hosts", [], |r| r.get(0))
@@ -94,7 +93,6 @@ async fn ssh_e2e_password_shell_roundtrip() {
     };
     assert_eq!(count, 1, "host key deve ter sido salvo");
 
-    // Abre shell e faz roundtrip de um comando
     let (input_tx, input_rx) = mpsc::channel(16);
     open_shell_and_bridge(handle, 80, 24, events.clone(), input_rx, || {})
         .await
@@ -107,7 +105,6 @@ async fn ssh_e2e_password_shell_roundtrip() {
         .unwrap();
     tokio::time::sleep(Duration::from_millis(1500)).await;
 
-    // resize não deve falhar
     input_tx
         .send(SessionInput::Resize { cols: 120, rows: 40 })
         .await
@@ -136,7 +133,6 @@ async fn ssh_e2e_password_shell_roundtrip() {
 async fn ssh_e2e_second_connection_skips_prompt() {
     let db = Db::open_in_memory().unwrap();
 
-    // 1ª conexão: aceita o prompt
     {
         let (events, rx_events) = test_channel();
         let (confirm_tx, confirm_rx) = oneshot::channel();
@@ -147,9 +143,8 @@ async fn ssh_e2e_second_connection_skips_prompt() {
         t.join().unwrap();
     }
 
-    // 2ª conexão: NÃO deve haver prompt (host já conhecido) — o oneshot
-    // é descartado sem resposta; se o prompt fosse emitido, check_server_key
-    // recusaria e a conexão falharia.
+    // The second connection must not prompt. The dropped sender would reject
+    // the connection if host-key confirmation were attempted.
     {
         let (events, rx_events) = test_channel();
         let (_confirm_tx, confirm_rx) = oneshot::channel::<bool>();
@@ -193,7 +188,6 @@ async fn ssh_e2e_wrong_password_fails_with_friendly_error() {
 async fn ssh_e2e_changed_host_key_is_blocked() {
     let db = Db::open_in_memory().unwrap();
 
-    // Simula um host key registrado anteriormente com fingerprint diferente.
     {
         let conn = db.0.lock().unwrap();
         for key_type in ["ssh-ed25519", "rsa-sha2-512", "ecdsa-sha2-nistp256"] {

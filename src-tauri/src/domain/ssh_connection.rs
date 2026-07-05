@@ -5,8 +5,9 @@ use super::AuthMethod;
 pub const DEFAULT_PORT: u16 = 22;
 pub const DEFAULT_GROUP: &str = "Geral";
 
-/// Registro persistido no SQLite. Nunca contém a senha ou passphrase reais —
-/// apenas as referências (`*_secret_key`) para busca no keyring do sistema.
+/// SQLite record for an SSH connection.
+///
+/// Secret values are never stored here; only keyring references are persisted.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshConnection {
     pub id: String,
@@ -25,8 +26,9 @@ pub struct SshConnection {
     pub updated_at: String,
 }
 
-/// Dados vindos do formulário. `password` e `passphrase` transitam apenas na
-/// memória até o keyring — não são persistidos nem retornados ao frontend.
+/// Form payload received from the frontend.
+///
+/// Passwords and passphrases only exist in memory until they are stored in the keyring.
 #[derive(Debug, Deserialize)]
 pub struct ConnectionInput {
     #[serde(default)]
@@ -64,7 +66,7 @@ impl FieldError {
     }
 }
 
-/// Campos normalizados e válidos, prontos para persistência.
+/// Normalized and validated connection data ready for persistence.
 #[derive(Debug)]
 pub struct ValidatedConnection {
     pub name: String,
@@ -78,8 +80,9 @@ pub struct ValidatedConnection {
 }
 
 impl ConnectionInput {
-    /// Valida e normaliza o input. `is_update` relaxa a exigência de senha:
-    /// numa edição, senha vazia significa "manter a credencial atual".
+    /// Validates and normalizes the payload.
+    ///
+    /// During updates, an empty password means "keep the current credential."
     pub fn validate(&self, is_update: bool) -> Result<ValidatedConnection, Vec<FieldError>> {
         let mut errors = Vec::new();
 
@@ -93,7 +96,6 @@ impl ConnectionInput {
             errors.push(FieldError::new("username", "Usuário é obrigatório."));
         }
 
-        // port: Option<u16> — o tipo já garante 0..=65535; resta rejeitar 0.
         let port = self.port.unwrap_or(DEFAULT_PORT);
         if port == 0 {
             errors.push(FieldError::new("port", "Porta deve estar entre 1 e 65535."));
@@ -246,7 +248,6 @@ mod tests {
 
     #[test]
     fn deserializes_frontend_payload() {
-        // Espelha exatamente o JSON que o frontend Leptos envia no invoke.
         let json = r#"{
             "name": "",
             "host": "10.0.0.5",

@@ -1,6 +1,5 @@
 use crate::error::{AppError, AppResult};
 
-/// Referências de credencial gravadas no SQLite no lugar do segredo.
 pub fn password_ref(connection_id: &str) -> String {
     format!("ssh-password:{connection_id}")
 }
@@ -9,15 +8,16 @@ pub fn passphrase_ref(connection_id: &str) -> String {
     format!("key-passphrase:{connection_id}")
 }
 
-/// Abstração sobre o cofre de credenciais do sistema, para permitir mock em testes.
+/// Abstraction over the OS credential store, with a mock implementation for tests.
 pub trait CredentialStore: Send + Sync {
     fn set(&self, entry_ref: &str, secret: &str) -> AppResult<()>;
     fn get(&self, entry_ref: &str) -> AppResult<Option<String>>;
     fn delete(&self, entry_ref: &str) -> AppResult<()>;
 }
 
-/// Implementação sobre o keyring do sistema (Secret Service no Linux,
-/// Keychain no macOS, Credential Manager no Windows).
+/// OS keyring implementation.
+///
+/// Uses Secret Service on Linux, Keychain on macOS, and Credential Manager on Windows.
 pub struct SystemKeyring {
     service: String,
 }
@@ -60,7 +60,6 @@ impl CredentialStore for SystemKeyring {
 
     fn delete(&self, entry_ref: &str) -> AppResult<()> {
         match self.entry(entry_ref)?.delete_credential() {
-            // Remoção é idempotente: entry inexistente não é erro.
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
             Err(e) => Err(map_keyring_error(e)),
         }
@@ -71,7 +70,7 @@ impl CredentialStore for SystemKeyring {
 mod system_tests {
     use super::*;
 
-    /// Roda contra o keyring REAL do sistema; execute com:
+    /// Runs against the real OS keyring:
     /// `cargo test real_keyring -- --ignored`
     #[test]
     #[ignore]
@@ -94,7 +93,6 @@ mod system_tests {
         store.delete(entry).unwrap();
         assert_eq!(store.get(entry).unwrap(), None);
 
-        // idempotência da remoção
         store.delete(entry).unwrap();
     }
 }

@@ -2,8 +2,9 @@ use serde::Serialize;
 
 use crate::domain::FieldError;
 
-/// Erro da aplicação, serializado para o frontend com tag `kind`.
-/// As mensagens são exibidas ao usuário: nunca devem conter segredos.
+/// Application error serialized to the frontend as a tagged `kind` payload.
+///
+/// These messages can be shown to users and must never include secrets.
 #[derive(Debug, thiserror::Error, Serialize)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum AppError {

@@ -14,8 +14,7 @@ use crate::ssh::registry::{SessionHandle, SessionInput, SessionRegistry};
 use crate::ssh::session::open_shell_and_bridge;
 use crate::state::CredStore;
 
-/// Conecta usando as credenciais salvas e abre o shell interativo.
-/// Retorna o `session_id` usado pelos demais commands da sessão.
+/// Opens an interactive SSH shell using stored credentials.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn ssh_connect(
@@ -78,8 +77,7 @@ pub async fn ssh_connect(
     .await
 }
 
-/// Fallback quando o keyring está indisponível: conecta com senha informada
-/// na hora, mantida apenas em memória.
+/// Opens an SSH shell with an in-memory password when the keyring is unavailable.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn ssh_connect_with_password(
@@ -157,7 +155,7 @@ pub async fn ssh_disconnect(
     Ok(())
 }
 
-/// Resposta do usuário ao prompt de fingerprint (TOFU).
+/// Sends the user's TOFU host-key decision to the pending SSH session.
 #[tauri::command]
 pub async fn confirm_host_key(
     registry: State<'_, SessionRegistry>,
@@ -181,9 +179,8 @@ async fn start_session(
     rows: u32,
     on_event: Channel<TerminalEvent>,
 ) -> AppResult<String> {
-    // session_id é gerado pelo frontend para que a UI possa confirmar o host
-    // key enquanto esta chamada ainda está pendente. Se colidir com uma sessão
-    // ativa, recusa (não deveria acontecer com UUID v4).
+    // The frontend generates the session id before invoking ssh_connect so it
+    // can answer TOFU prompts while this command is still pending.
     if registry.input_sender(&session_id).is_some() {
         return Err(AppError::Ssh("Sessão já em uso.".into()));
     }
@@ -191,7 +188,7 @@ async fn start_session(
     let (input_tx, input_rx) = mpsc::channel::<SessionInput>(64);
     let (host_key_tx, host_key_rx) = oneshot::channel::<bool>();
 
-    // Registra antes do connect: o prompt TOFU precisa achar a sessão.
+    // Register before connecting; TOFU prompts must be routed to this session.
     registry.insert(
         session_id.clone(),
         SessionHandle {

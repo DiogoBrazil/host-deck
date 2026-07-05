@@ -15,7 +15,7 @@ use crate::ssh::events::TerminalEvent;
 use crate::ssh::host_key::{self, Verdict};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
-/// Tempo máximo para o usuário confirmar o fingerprint na primeira conexão.
+/// Maximum time allowed for the first-connection host-key prompt.
 const HOST_KEY_CONFIRM_TIMEOUT: Duration = Duration::from_secs(120);
 
 pub enum AuthSpec {
@@ -33,13 +33,13 @@ pub struct ConnectParams {
     pub auth: AuthSpec,
 }
 
-/// Handler do russh com verificação TOFU do host key.
+/// russh handler that enforces TOFU host-key verification.
 pub struct TofuHandler {
     db: Arc<Mutex<Connection>>,
     host: String,
     port: u16,
     events: Channel<TerminalEvent>,
-    /// Recebe a resposta do usuário via command `confirm_host_key`.
+    /// Receives the user's decision from `confirm_host_key`.
     confirm_rx: Option<oneshot::Receiver<bool>>,
 }
 
@@ -80,7 +80,6 @@ impl client::Handler for TofuHandler {
                 let accepted =
                     match tokio::time::timeout(HOST_KEY_CONFIRM_TIMEOUT, confirm_rx).await {
                         Ok(Ok(accepted)) => accepted,
-                        // timeout ou sender descartado → recusa
                         _ => false,
                     };
                 log::info!("confirmação do host key: aceito={accepted}");
@@ -115,7 +114,7 @@ fn friendly_ssh_error(e: &russh::Error) -> AppError {
     AppError::Ssh(msg)
 }
 
-/// Conecta, verifica host key (TOFU) e autentica. Retorna o handle da sessão.
+/// Connects, verifies the host key, authenticates, and returns the session handle.
 pub async fn connect(
     db: Arc<Mutex<Connection>>,
     params: ConnectParams,
@@ -138,8 +137,8 @@ pub async fn connect(
         confirm_rx: Some(confirm_rx),
     };
 
-    // O handshake inclui a espera pela confirmação do host key (até 120s), por
-    // isso o timeout aqui é o de confirmação + folga, não um timeout curto.
+    // The SSH handshake can block on TOFU confirmation, so this timeout includes
+    // the full prompt window plus the network connection allowance.
     log::info!("iniciando handshake SSH com {addr}");
     let mut handle = tokio::time::timeout(
         HOST_KEY_CONFIRM_TIMEOUT + CONNECT_TIMEOUT,

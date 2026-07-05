@@ -8,13 +8,12 @@ use uuid::Uuid;
 
 use crate::error::AppResult;
 
-/// Resultado da verificação TOFU da chave do servidor.
 pub enum Verdict {
-    /// Chave já conhecida e idêntica.
+    /// The server key matches the stored key.
     Known,
-    /// Host nunca visto: pedir confirmação ao usuário.
+    /// No key has been stored for this host yet.
     Unknown,
-    /// Chave DIFERENTE da registrada: possível man-in-the-middle.
+    /// The server key differs from the stored key.
     Mismatch { stored_fingerprint: String },
 }
 

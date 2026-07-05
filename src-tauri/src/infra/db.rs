@@ -5,8 +5,9 @@ use rusqlite::Connection;
 
 use crate::error::{AppError, AppResult};
 
-/// Migrations aplicadas em ordem; a posição no array + 1 é o `user_version`
-/// esperado. Nunca remover ou reordenar entradas — apenas adicionar ao final.
+/// Ordered migrations; each array position maps to the expected `user_version`.
+///
+/// Never remove or reorder entries. Add new migrations only at the end.
 const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/001_create_ssh_connections.sql"),
     include_str!("../../migrations/002_create_known_hosts.sql"),
@@ -36,7 +37,7 @@ impl Db {
         Ok(Self(Arc::new(Mutex::new(conn))))
     }
 
-    /// Handle clonável para uso fora do `tauri::State` (ex.: tasks SSH).
+    /// Cloneable handle for tasks that run outside `tauri::State`.
     pub fn handle(&self) -> Arc<Mutex<Connection>> {
         Arc::clone(&self.0)
     }
@@ -71,7 +72,6 @@ mod tests {
             .unwrap();
         assert_eq!(version, MIGRATIONS.len() as u32);
 
-        // Rodar de novo não deve falhar (nenhuma migration reaplicada).
         run_migrations(&conn).unwrap();
     }
 }

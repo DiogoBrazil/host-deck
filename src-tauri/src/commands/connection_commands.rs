@@ -32,7 +32,8 @@ pub async fn create_connection(
     match persist_secrets(&conn, &store, &created.id, &input) {
         Ok(()) => repo::get(&conn, &created.id),
         Err(err) => {
-            // Sem credencial salva a conexão ficaria quebrada: desfaz o insert.
+            // Roll back the row if credential persistence fails; otherwise the
+            // connection would be saved without usable authentication material.
             let _ = repo::delete(&conn, &created.id);
             Err(err)
         }
@@ -52,7 +53,6 @@ pub async fn update_connection(
     let previous = repo::get(&conn, &id)?;
     repo::update(&conn, &id, &validated)?;
 
-    // Método de autenticação mudou: remove credenciais órfãs do keyring.
     if previous.auth_method != validated.auth_method {
         match validated.auth_method {
             AuthMethod::PrivateKey => store.0.delete(&password_ref(&id))?,
@@ -70,7 +70,6 @@ pub async fn delete_connection(
     store: State<'_, CredStore>,
     id: String,
 ) -> AppResult<()> {
-    // Credenciais primeiro (idempotente); só então o registro.
     store.0.delete(&password_ref(&id))?;
     store.0.delete(&passphrase_ref(&id))?;
 
@@ -78,8 +77,7 @@ pub async fn delete_connection(
     repo::delete(&conn, &id)
 }
 
-/// Grava senha/passphrase no keyring conforme o input e atualiza as
-/// referências no SQLite. Nunca escreve o segredo em si no banco.
+/// Stores secrets in the system keyring and writes only their references to SQLite.
 fn persist_secrets(
     conn: &rusqlite::Connection,
     store: &CredStore,
@@ -162,7 +160,6 @@ mod tests {
             Some("s3nh4")
         );
 
-        // O banco nunca contém a senha em si.
         let dump: Vec<String> = {
             let mut stmt = conn
                 .prepare("SELECT COALESCE(password_secret_key,'') || COALESCE(notes,'') || name || host FROM ssh_connections")
