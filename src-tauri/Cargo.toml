@@ -1,0 +1,33 @@
+[package]
+name = "host-deck"
+version = "0.1.0"
+description = "HostDeck — gerenciador de conexões SSH com terminal embutido"
+authors = ["Diogo"]
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3", features = [] }
+tauri-plugin-log = "2"
+rusqlite = { version = "0.37", features = ["bundled"] }
+uuid = { version = "1.20", features = ["v4"] }
+thiserror = "2.0.18"
+chrono = "0.4.45"
+keyring = { version = "3.6.3", features = ["sync-secret-service", "apple-native", "windows-native"] }
+russh = "0.62.1"
+base64 = "0.22.1"
+zeroize = "1.9.0"
+tokio = { version = "1.52.3", features = ["sync", "time", "net", "io-util", "macros"] }
+
+[dev-dependencies]
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time"] }

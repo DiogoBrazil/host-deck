@@ -1,0 +1,7 @@
+/dist
+/target
+/src-tauri/target
+/src-tauri/gen/schemas
+**/*.rs.bk
+.DS_Store
+.playwright-mcp/
