@@ -12,6 +12,8 @@
   --radius: 8px;
   --sidebar-width: 280px;
   font-size: 15px;
+  /* Render native form controls using the dark theme. */
+  color-scheme: dark;
 }
 
 * {
@@ -40,7 +42,7 @@ body {
   height: 100vh;
 }
 
-/* ── Sidebar ─────────────────────────────── */
+/* Sidebar */
 
 .sidebar {
   width: var(--sidebar-width);
@@ -88,7 +90,7 @@ body {
   margin-top: 8px;
 }
 
-/* ── Área principal ──────────────────────── */
+/* Main area */
 
 .main-area {
   flex: 1;
@@ -112,7 +114,7 @@ body {
   color: var(--text);
 }
 
-/* ── Lista de conexões ───────────────────── */
+/* Connection list */
 
 .search-box {
   padding: 4px 4px 10px;
@@ -205,7 +207,7 @@ body {
   color: var(--danger);
 }
 
-/* ── Inputs ──────────────────────────────── */
+/* Form controls */
 
 input[type="text"],
 input[type="password"],
@@ -222,17 +224,26 @@ textarea {
   user-select: text;
 }
 
+select {
+  background-color: var(--bg);
+}
+
 input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--accent);
 }
 
+select option {
+  background: var(--bg);
+  color: var(--text);
+}
+
 textarea {
   resize: vertical;
 }
 
-/* ── Modal / formulário ──────────────────── */
+/* Modal and form */
 
 .modal-backdrop {
   position: fixed;
@@ -335,7 +346,7 @@ textarea {
   background: #c9433c;
 }
 
-/* ── Banner de erro global ───────────────── */
+/* Global error banner */
 
 .error-banner {
   display: flex;
@@ -350,7 +361,7 @@ textarea {
   font-size: 0.88rem;
 }
 
-/* ── Painel do terminal ──────────────────── */
+/* Terminal panel */
 
 .terminal-panel {
   display: flex;
@@ -458,7 +469,7 @@ textarea {
   user-select: text;
 }
 
-/* ── Botões ──────────────────────────────── */
+/* Buttons */
 
 button {
   font: inherit;
