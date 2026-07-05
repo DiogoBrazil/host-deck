@@ -1,0 +1,500 @@
+:root {
+  --bg: #14161a;
+  --bg-panel: #1c1f26;
+  --bg-hover: #262a33;
+  --border: #2e333d;
+  --text: #e6e9ef;
+  --text-dim: #8b93a1;
+  --accent: #4f9cf9;
+  --accent-hover: #6cadfa;
+  --danger: #e5534b;
+  --success: #46a758;
+  --radius: 8px;
+  --sidebar-width: 280px;
+  font-size: 15px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+.app-layout {
+  display: flex;
+  height: 100vh;
+}
+
+/* ── Sidebar ─────────────────────────────── */
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-header .logo {
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.empty-state .hint {
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+/* ── Área principal ──────────────────────── */
+
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.main-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-dim);
+}
+
+.main-placeholder .title {
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+/* ── Lista de conexões ───────────────────── */
+
+.search-box {
+  padding: 4px 4px 10px;
+}
+
+.search-box input {
+  width: 100%;
+}
+
+.group {
+  margin-bottom: 10px;
+}
+
+.group-title {
+  padding: 6px 8px 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.connection-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.connection-item:hover {
+  background: var(--bg-hover);
+}
+
+.connection-item.selected {
+  background: var(--bg-hover);
+  outline: 1px solid var(--accent);
+}
+
+.connection-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.connection-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.connection-target {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.connection-actions {
+  display: none;
+  gap: 2px;
+}
+
+.connection-item:hover .connection-actions,
+.connection-item.selected .connection-actions {
+  display: flex;
+}
+
+.icon-btn {
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.icon-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.icon-btn.connect:hover {
+  color: var(--success);
+}
+
+.icon-btn.danger:hover {
+  color: var(--danger);
+}
+
+/* ── Inputs ──────────────────────────────── */
+
+input[type="text"],
+input[type="password"],
+select,
+textarea {
+  font: inherit;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  user-select: text;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+}
+
+textarea {
+  resize: vertical;
+}
+
+/* ── Modal / formulário ──────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.modal-sm {
+  width: min(420px, calc(100vw - 48px));
+}
+
+.modal h2 {
+  font-size: 1.05rem;
+  margin-bottom: 16px;
+}
+
+.confirm-message {
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-field > span {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.form-field.span-2,
+.form-check.span-2 {
+  grid-column: span 2;
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.form-check input {
+  width: auto;
+}
+
+.field-error {
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+
+.form-error-banner {
+  background: rgba(229, 83, 75, 0.12);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-danger:hover {
+  background: #c9433c;
+}
+
+/* ── Banner de erro global ───────────────── */
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px;
+  padding: 10px 14px;
+  background: rgba(229, 83, 75, 0.12);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+}
+
+/* ── Painel do terminal ──────────────────── */
+
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.terminal-title > span:nth-child(2) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-dim);
+}
+
+.status-dot.connecting {
+  background: #d9a441;
+}
+
+.status-dot.connected {
+  background: var(--success);
+}
+
+.status-dot.closed {
+  background: var(--text-dim);
+}
+
+.status-dot.error {
+  background: var(--danger);
+}
+
+.status-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.terminal-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 0.82rem;
+}
+
+.terminal-banner {
+  padding: 8px 14px;
+  font-size: 0.83rem;
+}
+
+.terminal-banner.error {
+  background: rgba(229, 83, 75, 0.12);
+  color: #f0a29c;
+}
+
+.terminal-banner.closed {
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+
+.terminal-container {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 8px;
+  background: #0f1115;
+}
+
+.fingerprint-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 16px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  word-break: break-all;
+  user-select: text;
+}
+
+/* ── Botões ──────────────────────────────── */
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+  transition: background 0.15s;
+}
+
+.btn:hover {
+  background: var(--border);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-block {
+  width: 100%;
+}
