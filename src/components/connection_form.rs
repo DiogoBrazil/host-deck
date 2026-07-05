@@ -1,15 +1,16 @@
+use std::rc::Rc;
+
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::api;
 use crate::models::{AppError, AuthMethod, ConnectionInput, FieldError, SshConnection};
 
-/// Modal de criação/edição. `editing = Some(conn)` preenche os campos;
-/// senha/passphrase nunca são pré-preenchidas (write-only).
+/// Create/edit modal. Secrets are write-only and are never prefilled.
 #[component]
 pub fn ConnectionForm(
     editing: Option<SshConnection>,
-    on_saved: Callback<SshConnection>,
+    on_saved: Callback<(SshConnection, bool)>,
     on_cancel: Callback<()>,
 ) -> impl IntoView {
     let is_edit = editing.is_some();
@@ -67,14 +68,13 @@ pub fn ConnectionForm(
             .map(|e| e.message)
     };
 
-    let submit = move |_| {
+    let do_submit: Rc<dyn Fn(bool)> = Rc::new(move |connect: bool| {
         if saving.get() {
             return;
         }
         field_errors.set(Vec::new());
         general_error.set(None);
 
-        // Porta: campo vazio usa o default (22); valor não numérico é erro local.
         let port_value = {
             let raw = port.get();
             let trimmed = raw.trim();
@@ -131,16 +131,17 @@ pub fn ConnectionForm(
 
             match result {
                 Ok(conn) => {
-                    // Segredos não permanecem no estado após o envio.
                     password.set(String::new());
                     passphrase.set(String::new());
-                    on_saved.run(conn);
+                    on_saved.run((conn, connect));
                 }
                 Err(AppError::Validation(errors)) => field_errors.set(errors),
                 Err(err) => general_error.set(Some(err.message())),
             }
         });
-    };
+    });
+    let submit_save = do_submit.clone();
+    let submit_save_connect = do_submit.clone();
 
     view! {
         <div class="modal-backdrop" on:click=move |_| on_cancel.run(())>
@@ -310,8 +311,19 @@ pub fn ConnectionForm(
                     <button class="btn" on:click=move |_| on_cancel.run(())>
                         "Cancelar"
                     </button>
-                    <button class="btn btn-primary" disabled=move || saving.get() on:click=submit>
+                    <button
+                        class="btn"
+                        disabled=move || saving.get()
+                        on:click=move |_| submit_save(false)
+                    >
                         {move || if saving.get() { "Salvando…" } else { "Salvar" }}
+                    </button>
+                    <button
+                        class="btn btn-primary"
+                        disabled=move || saving.get()
+                        on:click=move |_| submit_save_connect(true)
+                    >
+                        "Salvar e conectar"
                     </button>
                 </div>
             </div>

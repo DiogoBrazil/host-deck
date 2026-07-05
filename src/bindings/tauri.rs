@@ -6,19 +6,18 @@ use crate::models::AppError;
 
 #[wasm_bindgen]
 extern "C" {
-    /// `window.__TAURI__.core.invoke` (disponível via `withGlobalTauri`).
+    /// `window.__TAURI__.core.invoke`, exposed through `withGlobalTauri`.
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "core"], js_name = invoke, catch)]
     async fn invoke_raw(cmd: &str, args: JsValue) -> Result<JsValue, JsValue>;
 }
 
-/// O runtime IPC do Tauri está presente? (falso em browser comum)
 fn has_tauri_runtime() -> bool {
     web_sys::window()
         .map(|win| js_sys::Reflect::has(&win, &JsValue::from_str("__TAURI__")).unwrap_or(false))
         .unwrap_or(false)
 }
 
-/// Chama um command Tauri serializando args e desserializando o retorno.
+/// Invokes a Tauri command with typed arguments and response decoding.
 pub async fn invoke<T, A>(cmd: &str, args: &A) -> Result<T, AppError>
 where
     T: DeserializeOwned,
@@ -40,7 +39,6 @@ where
     }
 }
 
-/// Command sem argumentos.
 pub async fn invoke_no_args<T: DeserializeOwned>(cmd: &str) -> Result<T, AppError> {
     invoke(cmd, &serde_json::Map::new()).await
 }

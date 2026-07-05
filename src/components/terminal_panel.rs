@@ -13,27 +13,29 @@ enum Status {
     Error(String),
 }
 
-/// Painel do terminal embutido. Monta o xterm.js via glue JS e reflete o
-/// estado da sessão SSH. Uma instância por conexão ativa (a `key` no pai
-/// garante remontagem ao trocar de conexão).
 #[component]
-pub fn TerminalPanel(connection: SshConnection, on_close: Callback<()>) -> impl IntoView {
+pub fn TerminalPanel(
+    connection: SshConnection,
+    instance_id: u64,
+    on_close: Callback<()>,
+) -> impl IntoView {
     let status = RwSignal::new(Status::Connecting);
     let host_key_prompt = RwSignal::new(Option::<HostKeyInfo>::None);
-    // TerminalHandle não é Send; StoredValue local o guarda no runtime reativo.
+    // TerminalHandle is not Send, so it must stay in the local reactive runtime.
     let handle = StoredValue::new_local(Option::<TerminalHandle>::None);
 
     let conn_id = connection.id.clone();
+    let container_id = format!("terminal-container-{instance_id}");
+    let effect_container_id = container_id.clone();
     let title = format!(
         "{} — {}@{}:{}",
         connection.name, connection.username, connection.host, connection.port
     );
 
-    // Inicializa o terminal após o div existir no DOM.
     Effect::new(move |_| {
         let conn_id = conn_id.clone();
+        let container_id = effect_container_id.clone();
 
-        // Callback de status vindo do JS: (status, detail?).
         let on_status = Closure::<dyn FnMut(String, Option<String>)>::new(
             move |kind: String, detail: Option<String>| match kind.as_str() {
                 "connected" => status.set(Status::Connected),
@@ -50,10 +52,10 @@ pub fn TerminalPanel(connection: SshConnection, on_close: Callback<()>) -> impl 
             },
         );
 
-        // into_js_value mantém o closure vivo enquanto o terminal existir.
+        // Keep the JS callback alive for the lifetime of the terminal instance.
         let on_status = on_status.into_js_value();
         spawn_local(async move {
-            match start_terminal("terminal-container", &conn_id, &on_status).await {
+            match start_terminal(&container_id, &conn_id, &on_status).await {
                 Ok(h) => handle.set_value(Some(h.unchecked_into::<TerminalHandle>())),
                 Err(err) => {
                     status.set(Status::Error(format!("Falha ao iniciar terminal: {err:?}")))
@@ -62,15 +64,15 @@ pub fn TerminalPanel(connection: SshConnection, on_close: Callback<()>) -> impl 
         });
     });
 
-    let disconnect = move |_| {
-        handle.with_value(|h| {
-            if let Some(h) = h.as_ref() {
-                h.disconnect();
+    on_cleanup(move || {
+        handle.update_value(|h| {
+            if let Some(h) = h.take() {
+                h.dispose();
             }
         });
-    };
+    });
 
-    let close_panel = move |_| {
+    let leave = move |_| {
         handle.update_value(|h| {
             if let Some(h) = h.take() {
                 h.dispose();
@@ -105,15 +107,14 @@ pub fn TerminalPanel(connection: SshConnection, on_close: Callback<()>) -> impl 
                     <span class="status-label">{move || status_badge().1}</span>
                 </div>
                 <div class="terminal-actions">
-                    <button
-                        class="btn btn-sm"
-                        on:click=disconnect
-                        disabled=move || status.get() != Status::Connected
-                    >
-                        "Desconectar"
-                    </button>
-                    <button class="btn btn-sm" on:click=close_panel>
-                        "Fechar"
+                    <button class="btn btn-sm" on:click=leave>
+                        {move || {
+                            if status.get() == Status::Connected {
+                                "Desconectar"
+                            } else {
+                                "Fechar"
+                            }
+                        }}
                     </button>
                 </div>
             </div>
@@ -128,7 +129,7 @@ pub fn TerminalPanel(connection: SshConnection, on_close: Callback<()>) -> impl 
                 _ => None,
             }}
 
-            <div id="terminal-container" class="terminal-container"></div>
+            <div id=container_id class="terminal-container"></div>
 
             {move || {
                 host_key_prompt

@@ -26,8 +26,7 @@ pub struct SshConnection {
     pub updated_at: String,
 }
 
-/// Payload de criação/edição. Senha e passphrase só transitam no submit;
-/// os campos são limpos na UI logo após o envio.
+/// Create/update payload. Secrets are write-only and cleared after submit.
 #[derive(Debug, Clone, Serialize)]
 pub struct ConnectionInput {
     pub name: String,
@@ -49,7 +48,7 @@ pub struct FieldError {
     pub message: String,
 }
 
-/// Espelho do `AppError` do backend (tag `kind`, conteúdo `data`).
+/// Frontend mirror of the backend `AppError` wire format.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum AppError {
@@ -78,7 +77,7 @@ impl AppError {
         )
     }
 
-    /// Mensagem amigável para exibição fora de formulários.
+    /// User-facing message for non-form error displays.
     pub fn message(&self) -> String {
         match self {
             AppError::Validation(errors) => errors
@@ -94,14 +93,6 @@ impl AppError {
             AppError::CredentialStore(m) => format!("Erro no armazenamento seguro: {m}"),
             AppError::Ssh(m) => m.clone(),
             AppError::Internal(m) => format!("Erro interno: {m}"),
-        }
-    }
-
-    /// Erros por campo, quando for erro de validação.
-    pub fn field_errors(&self) -> Vec<FieldError> {
-        match self {
-            AppError::Validation(errors) => errors.clone(),
-            _ => Vec::new(),
         }
     }
 }

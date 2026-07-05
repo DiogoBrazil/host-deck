@@ -8,12 +8,17 @@ use crate::components::connection_list::ConnectionList;
 use crate::components::terminal_panel::TerminalPanel;
 use crate::models::SshConnection;
 
-/// Estado do modal de formulário: fechado, criar ou editar.
 #[derive(Clone, PartialEq)]
 enum FormState {
     Closed,
     New,
     Edit(SshConnection),
+}
+
+#[derive(Clone, PartialEq)]
+struct ActiveSession {
+    connection: SshConnection,
+    instance_id: u64,
 }
 
 #[component]
@@ -24,8 +29,8 @@ pub fn Layout() -> impl IntoView {
     let form_state = RwSignal::new(FormState::Closed);
     let deleting = RwSignal::new(Option::<SshConnection>::None);
     let error_banner = RwSignal::new(Option::<String>::None);
-    // Conexão com terminal aberto (uma por vez no MVP).
-    let active_session = RwSignal::new(Option::<SshConnection>::None);
+    let active_session = RwSignal::new(Option::<ActiveSession>::None);
+    let session_counter = RwSignal::new(0_u64);
 
     let reload = move || {
         spawn_local(async move {
@@ -36,13 +41,47 @@ pub fn Layout() -> impl IntoView {
         });
     };
 
-    // Carga inicial.
     reload();
 
-    let on_saved = Callback::new(move |conn: SshConnection| {
+    let upsert_connection = move |conn: SshConnection| {
+        connections.update(|list| {
+            match list.iter_mut().find(|item| item.id == conn.id) {
+                Some(existing) => *existing = conn.clone(),
+                None => list.push(conn.clone()),
+            }
+            list.sort_by(|a, b| {
+                a.group_name
+                    .cmp(&b.group_name)
+                    .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            });
+        });
+
+        active_session.update(|session| {
+            if let Some(active) = session {
+                if active.connection.id == conn.id {
+                    active.connection = conn.clone();
+                }
+            }
+        });
+    };
+
+    let open_session = move |conn: SshConnection| {
+        let next = session_counter.get() + 1;
+        session_counter.set(next);
+        active_session.set(Some(ActiveSession {
+            connection: conn,
+            instance_id: next,
+        }));
+    };
+
+    let on_saved = Callback::new(move |(conn, connect): (SshConnection, bool)| {
         form_state.set(FormState::Closed);
-        selected_id.set(Some(conn.id));
+        selected_id.set(Some(conn.id.clone()));
+        upsert_connection(conn.clone());
         reload();
+        if connect {
+            open_session(conn);
+        }
     });
 
     let on_edit = Callback::new(move |conn: SshConnection| {
@@ -55,7 +94,7 @@ pub fn Layout() -> impl IntoView {
 
     let on_connect = Callback::new(move |conn: SshConnection| {
         selected_id.set(Some(conn.id.clone()));
-        active_session.set(Some(conn));
+        open_session(conn);
     });
 
     let confirm_delete = Callback::new(move |_| {
@@ -119,10 +158,11 @@ pub fn Layout() -> impl IntoView {
                         })
                 }}
                 {move || match active_session.get() {
-                    Some(conn) => {
+                    Some(session) => {
                         view! {
                             <TerminalPanel
-                                connection=conn
+                                connection=session.connection
+                                instance_id=session.instance_id
                                 on_close=Callback::new(move |_| active_session.set(None))
                             />
                         }

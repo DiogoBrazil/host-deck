@@ -2,7 +2,6 @@ use leptos::prelude::*;
 
 use crate::models::SshConnection;
 
-/// Lista lateral: busca + grupos + ações por conexão.
 #[component]
 pub fn ConnectionList(
     connections: Signal<Vec<SshConnection>>,
@@ -12,7 +11,6 @@ pub fn ConnectionList(
     on_delete: Callback<SshConnection>,
     on_connect: Callback<SshConnection>,
 ) -> impl IntoView {
-    // Filtra por nome, host ou grupo e reagrupa preservando a ordem do backend.
     let grouped = Memo::new(move |_| {
         let query = search.get().trim().to_lowercase();
         let mut groups: Vec<(String, Vec<SshConnection>)> = Vec::new();
@@ -65,17 +63,19 @@ pub fn ConnectionList(
                 </div>
             </Show>
 
-            <For
-                each=move || grouped.get()
-                key=|(group, items)| format!("{group}:{}", items.len())
-                children=move |(group, items)| {
-                    view! {
-                        <div class="group">
-                            <div class="group-title">{group}</div>
-                            <For
-                                each=move || items.clone()
-                                key=|conn| (conn.id.clone(), conn.updated_at.clone())
-                                children=move |conn| {
+            // Use a reactive outer block so item edits rerender even when group counts are unchanged.
+            {move || {
+                grouped
+                    .get()
+                    .into_iter()
+                    .map(|(group, items)| {
+                        view! {
+                            <div class="group">
+                                <div class="group-title">{group}</div>
+                                <For
+                                    each=move || items.clone()
+                                    key=|conn| (conn.id.clone(), conn.updated_at.clone())
+                                    children=move |conn| {
                                     let conn_select = conn.clone();
                                     let conn_edit = conn.clone();
                                     let conn_delete = conn.clone();
@@ -134,12 +134,13 @@ pub fn ConnectionList(
                                             </div>
                                         </div>
                                     }
-                                }
-                            />
-                        </div>
-                    }
-                }
-            />
+                                    }
+                                />
+                            </div>
+                        }
+                    })
+                    .collect_view()
+            }}
         </div>
     }
 }
