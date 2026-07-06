@@ -1,9 +1,10 @@
 # HostDeck
 
-HostDeck é um cliente desktop para gerenciar conexões SSH e abrir terminais
-interativos embutidos. O projeto foi construído com **Tauri v2 + Rust + Leptos
-(WASM)**, usa `russh` para falar SSH nativamente, `rusqlite` para persistência
-local e o keyring do sistema para armazenar segredos.
+HostDeck é um cliente desktop para gerenciar conexões SSH, abrir terminais
+interativos embutidos e transferir arquivos por SFTP. O projeto foi construído
+com **Tauri v2 + Rust + Leptos (WASM)**, usa `russh` para falar SSH nativamente,
+`rusqlite` para persistência local e o keyring do sistema para armazenar
+segredos.
 
 O objetivo é oferecer uma alternativa simples e segura para organizar hosts,
 credenciais e sessões de terminal sem depender de shell local, concatenação de
@@ -22,6 +23,14 @@ comandos ou armazenamento de senha em texto puro.
 - Armazenamento seguro de senha/passphrase no keyring do sistema.
 - SQLite local contendo apenas metadados e referências para os segredos.
 
+### Em desenvolvimento
+
+- Transferência de arquivos por **SFTP**, reaproveitando a mesma conexão SSH,
+  o TOFU de host key e as credenciais já cadastradas. Navegador de arquivos
+  remoto com listagem, navegação, upload, download, criar pasta, renomear e
+  remover. O desenho completo está em
+  [docs/SFTP_SPEC.md](docs/SFTP_SPEC.md).
+
 ## Stack Técnica
 
 - **Tauri v2**: shell desktop, IPC, empacotamento e integração com o sistema.
@@ -30,6 +39,9 @@ comandos ou armazenamento de senha em texto puro.
 - **Trunk**: build/dev server do frontend.
 - **xterm.js**: terminal no WebView.
 - **russh**: implementação SSH nativa em Rust.
+- **russh-sftp** *(planejado)*: cliente SFTP sobre o channel SSH do russh.
+- **tauri-plugin-dialog** *(planejado)*: seleção de caminho local para
+  upload/download.
 - **rusqlite**: banco local SQLite com SQLite bundled.
 - **keyring**: Secret Service, Keychain ou Credential Manager.
 - **tokio**: tarefas assíncronas, canais e rede.
@@ -62,6 +74,8 @@ SSH ativas.
 
 ```text
 .
+├── docs/
+│   └── SFTP_SPEC.md             # Especificação da transferência via SFTP
 ├── src/                         # Frontend Leptos/WASM
 │   ├── api.rs                   # Wrapper das chamadas IPC de CRUD
 │   ├── bindings/                # Bindings Tauri e terminal JS
@@ -78,6 +92,7 @@ SSH ativas.
 │   │   ├── domain/              # Tipos e validação de domínio
 │   │   ├── infra/               # SQLite e keyring
 │   │   ├── ssh/                 # Cliente SSH, TOFU, sessões e eventos
+│   │   ├── sftp/                # Cliente SFTP e transferências (planejado)
 │   │   ├── error.rs             # Erros serializados para o frontend
 │   │   ├── lib.rs               # Setup Tauri e registro de commands
 │   │   └── state.rs             # Estado compartilhado
@@ -224,6 +239,18 @@ A combinação `(host, port, key_type)` é única.
 - `ssh_disconnect`: encerra a sessão.
 - `confirm_host_key`: responde ao prompt TOFU.
 
+### SFTP *(planejado)*
+
+Conjunto de commands para o navegador de arquivos, reaproveitando a conexão SSH
+e o TOFU. Detalhes e assinaturas em [docs/SFTP_SPEC.md](docs/SFTP_SPEC.md).
+
+- `sftp_connect` / `sftp_connect_with_password`: abre o subsistema SFTP.
+- `sftp_realpath`: resolve o diretório home e caminhos canônicos.
+- `sftp_list_dir`: lista um diretório remoto.
+- `sftp_download` / `sftp_upload`: transferências com progresso via evento.
+- `sftp_mkdir`, `sftp_rename`, `sftp_remove_file`, `sftp_remove_dir`: gerência.
+- `sftp_disconnect`: encerra a sessão SFTP.
+
 ## Segurança
 
 - Segredos não são gravados no SQLite.
@@ -365,6 +392,8 @@ Verifique:
 - Não há importação/exportação de conexões.
 - Não há suporte explícito a jump host, agent forwarding ou múltiplas abas de
   terminal.
+- A transferência de arquivos por SFTP está especificada
+  ([docs/SFTP_SPEC.md](docs/SFTP_SPEC.md)) mas ainda não implementada.
 
 ## Convenções de Manutenção
 
