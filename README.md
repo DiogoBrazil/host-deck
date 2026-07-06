@@ -375,30 +375,31 @@ Os instaladores para download são gerados pelo GitHub Actions
 acionado ao publicar uma **tag `v*`** (ou manualmente pelo botão "Run workflow"
 na aba Actions).
 
-Para publicar, use o script — ele cuida de tudo (atualiza a versão nos arquivos,
-commita, cria a tag e faz push):
+Para publicar, use o script — ele **calcula a próxima versão sozinho** a partir
+do registro `scripts/releases.json`. No Windows, rode pelo Git Bash:
 
-```powershell
-# Mostra a versão atual
-.\scripts\release.ps1
-
-# Publica a versão 0.1.1 (cria e envia a tag v0.1.1)
-.\scripts\release.ps1 0.1.1
+```bash
+bash scripts/release.sh          # incrementa o patch (0.1.0 -> 0.1.1)
+bash scripts/release.sh minor    # 0.1.3 -> 0.2.0
+bash scripts/release.sh major    # 0.4.2 -> 1.0.0
+bash scripts/release.sh 1.2.3    # versão explícita
+bash scripts/release.sh show     # só mostra as versões, sem publicar
 ```
 
-O script atualiza a versão em `Cargo.toml` (raiz), `src-tauri/Cargo.toml` e
-`src-tauri/tauri.conf.json`, faz o commit `release: v0.1.1`, cria a tag e envia
-tudo. Alguns minutos depois, os instaladores aparecem em
+O script, em um único commit `release: vX.Y.Z`:
+
+1. lê a última versão em `scripts/releases.json` e calcula a próxima;
+2. atualiza a versão em `Cargo.toml` (raiz), `src-tauri/Cargo.toml` e
+   `src-tauri/tauri.conf.json`;
+3. registra a nova versão em `scripts/releases.json` (histórico, mais novo no topo);
+4. cria a tag e faz push da branch + tag.
+
+Alguns minutos depois, os instaladores aparecem em
 [Releases](https://github.com/DiogoBrazil/host-deck/releases) (Windows `.msi`/
 `.exe` e Linux `.deb`/`.rpm`/`.AppImage`).
 
-> Equivalente manual, se preferir sem o script:
-> ```bash
-> # edite a versão nos 3 arquivos acima, então:
-> git commit -am "release: v0.1.1"
-> git tag v0.1.1
-> git push origin <branch> && git push origin v0.1.1
-> ```
+O arquivo `scripts/releases.json` é a fonte da verdade do versionamento — o
+script sempre parte da última entrada dele para o próximo número.
 
 ## Troubleshooting
 

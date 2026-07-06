@@ -4,7 +4,7 @@ name: build
 # Roda SÓ quando você quer gerar downloads — não em todo push:
 #   - push de tag `v*` (ex.: v0.1.0): gera os instaladores e publica um Release.
 #   - "Run workflow" (aba Actions): build manual sob demanda (só artefatos).
-# Use o script `scripts/release.ps1` para publicar uma nova versão.
+# Use o script `scripts/release.sh` para publicar uma nova versão.
 on:
   push:
     tags: ["v*"]
