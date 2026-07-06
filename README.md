@@ -39,18 +39,13 @@ Escolha o arquivo conforme o seu sistema:
 - Botões para salvar, salvar e conectar, editar, remover e conectar.
 - Terminal interativo embutido com xterm.js e PTY remoto.
 - Redimensionamento do terminal sincronizado com a sessão SSH.
+- Navegador de arquivos remoto por SFTP, com listagem, navegação, upload,
+  download, criação de pasta, renomear e remover.
+- Progresso e cancelamento de transferências SFTP.
 - Verificação de host key com modelo TOFU.
 - Bloqueio de conexão quando a host key conhecida muda.
 - Armazenamento seguro de senha/passphrase no keyring do sistema.
 - SQLite local contendo apenas metadados e referências para os segredos.
-
-### Em desenvolvimento
-
-- Transferência de arquivos por **SFTP**, reaproveitando a mesma conexão SSH,
-  o TOFU de host key e as credenciais já cadastradas. Navegador de arquivos
-  remoto com listagem, navegação, upload, download, criar pasta, renomear e
-  remover. O desenho completo está em
-  [docs/SFTP_SPEC.md](docs/SFTP_SPEC.md).
 
 ## Stack Técnica
 
@@ -60,9 +55,8 @@ Escolha o arquivo conforme o seu sistema:
 - **Trunk**: build/dev server do frontend.
 - **xterm.js**: terminal no WebView.
 - **russh**: implementação SSH nativa em Rust.
-- **russh-sftp** *(planejado)*: cliente SFTP sobre o channel SSH do russh.
-- **tauri-plugin-dialog** *(planejado)*: seleção de caminho local para
-  upload/download.
+- **russh-sftp**: cliente SFTP sobre o channel SSH do russh.
+- **tauri-plugin-dialog**: seleção de caminho local para upload/download.
 - **rusqlite**: banco local SQLite com SQLite bundled.
 - **keyring**: Secret Service, Keychain ou Credential Manager.
 - **tokio**: tarefas assíncronas, canais e rede.
@@ -74,9 +68,10 @@ Escolha o arquivo conforme o seu sistema:
 Leptos (WASM)
   -> wasm-bindgen
   -> public/js/terminal.js + xterm.js
+  -> public/js/sftp.js + src/sftp_api.rs
   -> Tauri IPC (invoke + Channel)
   -> Rust backend
-  -> russh
+  -> russh / russh-sftp
   -> servidor SSH
 ```
 
@@ -87,23 +82,27 @@ O terminal é montado pelo glue JavaScript em `public/js/terminal.js`. Esse glue
 instancia xterm.js, cria um `tauri::ipc::Channel`, envia input/resize para o
 backend e escreve a saída recebida no terminal.
 
+O navegador SFTP usa `public/js/sftp.js` para o ciclo de vida da sessão, eventos
+e diálogos nativos de arquivo. As operações de diretório e transferência são
+chamadas pelo wrapper tipado em `src/sftp_api.rs`.
+
 O backend vive em `src-tauri/src/`. Ele registra o SQLite, o keyring e o
 registry de sessões como estado Tauri, expõe comandos IPC e mantém as sessões
-SSH ativas.
+SSH e SFTP ativas.
 
 ## Estrutura do Repositório
 
 ```text
 .
-├── docs/
-│   └── SFTP_SPEC.md             # Especificação da transferência via SFTP
 ├── src/                         # Frontend Leptos/WASM
 │   ├── api.rs                   # Wrapper das chamadas IPC de CRUD
-│   ├── bindings/                # Bindings Tauri e terminal JS
-│   ├── components/              # Layout, lista, formulário e terminal
+│   ├── sftp_api.rs              # Wrapper das chamadas IPC de SFTP
+│   ├── bindings/                # Bindings Tauri, terminal JS e SFTP JS
+│   ├── components/              # Layout, lista, formulário, terminal e SFTP
 │   └── models.rs                # Tipos espelhados do backend
 ├── public/
 │   ├── js/terminal.js           # Integração xterm.js <-> Tauri
+│   ├── js/sftp.js               # Integração SFTP <-> Tauri e diálogos nativos
 │   ├── styles.css               # Estilos da UI
 │   └── vendor/xterm/            # Assets vendorizados do xterm.js
 ├── src-tauri/
@@ -113,7 +112,7 @@ SSH ativas.
 │   │   ├── domain/              # Tipos e validação de domínio
 │   │   ├── infra/               # SQLite e keyring
 │   │   ├── ssh/                 # Cliente SSH, TOFU, sessões e eventos
-│   │   ├── sftp/                # Cliente SFTP e transferências (planejado)
+│   │   ├── sftp/                # Cliente SFTP, sessões e transferências
 │   │   ├── error.rs             # Erros serializados para o frontend
 │   │   ├── lib.rs               # Setup Tauri e registro de commands
 │   │   └── state.rs             # Estado compartilhado
@@ -188,6 +187,33 @@ A sessão envia eventos para o frontend:
 - `closed`: sessão encerrada;
 - `error`: erro assíncrono após iniciar a sessão.
 
+### Transferência de arquivos por SFTP
+
+Ao clicar no botão de arquivos de uma conexão, o frontend gera um `session_id`
+e chama `sftp_connect`. A conexão usa as mesmas credenciais salvas, a mesma
+verificação TOFU de host key e o mesmo registro `known_hosts` do terminal.
+
+O backend autentica via `russh`, abre o subsistema `sftp` em um channel SSH e
+mantém a sessão no `SftpRegistry`. Depois de conectado, o painel resolve o
+diretório inicial com `sftp_realpath(".", ...)` e lista as entradas remotas com
+`sftp_list_dir`.
+
+O painel SFTP permite:
+
+- navegar por diretórios remotos;
+- enviar arquivo local para o diretório atual;
+- baixar arquivo remoto escolhendo o destino local;
+- criar pasta remota;
+- renomear arquivo, pasta ou symlink;
+- remover arquivo ou pasta vazia;
+- acompanhar progresso de upload/download;
+- cancelar transferência em andamento.
+
+Uploads e downloads usam os diálogos nativos do `tauri-plugin-dialog` para
+selecionar caminhos locais. O conteúdo dos arquivos não passa pelo WebView: as
+transferências são executadas no backend e o frontend recebe apenas eventos de
+progresso, conclusão, erro e fechamento pelo `tauri::ipc::Channel`.
+
 ### TOFU e host keys
 
 HostDeck usa TOFU (trust on first use):
@@ -260,16 +286,17 @@ A combinação `(host, port, key_type)` é única.
 - `ssh_disconnect`: encerra a sessão.
 - `confirm_host_key`: responde ao prompt TOFU.
 
-### SFTP *(planejado)*
+### SFTP
 
-Conjunto de commands para o navegador de arquivos, reaproveitando a conexão SSH
-e o TOFU. Detalhes e assinaturas em [docs/SFTP_SPEC.md](docs/SFTP_SPEC.md).
+Commands para o navegador de arquivos, reaproveitando as credenciais SSH salvas
+e o TOFU.
 
 - `sftp_connect` / `sftp_connect_with_password`: abre o subsistema SFTP.
 - `sftp_realpath`: resolve o diretório home e caminhos canônicos.
 - `sftp_list_dir`: lista um diretório remoto.
 - `sftp_download` / `sftp_upload`: transferências com progresso via evento.
 - `sftp_mkdir`, `sftp_rename`, `sftp_remove_file`, `sftp_remove_dir`: gerência.
+- `sftp_cancel_transfer`: cancela uma transferência em andamento.
 - `sftp_disconnect`: encerra a sessão SFTP.
 
 ## Segurança
@@ -280,7 +307,8 @@ e o TOFU. Detalhes e assinaturas em [docs/SFTP_SPEC.md](docs/SFTP_SPEC.md).
 - A entrada do usuário é enviada como dados de canal PTY, não concatenada em
   comandos locais.
 - O app usa CSP restritiva em `tauri.conf.json`.
-- A capability padrão usa apenas `core:default`.
+- A capability padrão usa `core:default` e permite apenas os diálogos nativos
+  necessários para abrir/salvar arquivos.
 - Mudança de host key bloqueia a conexão.
 - Excluir conexão remove referências correspondentes no keyring.
 
@@ -439,15 +467,15 @@ Verifique:
 
 ## Limitações Atuais
 
-- O MVP mantém uma sessão de terminal ativa por vez.
+- O MVP mantém uma sessão principal ativa por vez: terminal ou painel SFTP.
 - `ssh_connect_with_password` existe no backend como fallback, mas ainda não há
   fluxo de UI dedicado para pedir senha avulsa quando o keyring falha.
 - Não há tela própria para gerenciar/remover entradas de `known_hosts`.
 - Não há importação/exportação de conexões.
 - Não há suporte explícito a jump host, agent forwarding ou múltiplas abas de
   terminal.
-- A transferência de arquivos por SFTP está especificada
-  ([docs/SFTP_SPEC.md](docs/SFTP_SPEC.md)) mas ainda não implementada.
+- A remoção de diretórios via SFTP é para pastas vazias; não há remoção
+  recursiva documentada na UI.
 
 ## Convenções de Manutenção
 
@@ -457,3 +485,12 @@ Verifique:
 - Manter nomes serializados de eventos e erros compatíveis com o frontend.
 - Preferir mudanças pequenas e testáveis nos limites atuais de domínio, infra,
   commands e UI.
+
+## Licença
+
+Este projeto é distribuído sob a licença MIT.
+
+## Autores
+
+- [DiogoBrazil](https://github.com/DiogoBrazil) — principal.
+- [BelezaSystem](https://github.com/BelezaSystem) — colaborador.
