@@ -5,6 +5,7 @@ use crate::api;
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::connection_form::ConnectionForm;
 use crate::components::connection_list::ConnectionList;
+use crate::components::sftp_panel::SftpPanel;
 use crate::components::terminal_panel::TerminalPanel;
 use crate::models::SshConnection;
 
@@ -21,6 +22,21 @@ struct ActiveSession {
     instance_id: u64,
 }
 
+/// The active main-area view: a terminal or an SFTP file browser.
+#[derive(Clone, PartialEq)]
+enum ActiveView {
+    Terminal(ActiveSession),
+    Sftp(ActiveSession),
+}
+
+impl ActiveView {
+    fn session_mut(&mut self) -> &mut ActiveSession {
+        match self {
+            ActiveView::Terminal(s) | ActiveView::Sftp(s) => s,
+        }
+    }
+}
+
 #[component]
 pub fn Layout() -> impl IntoView {
     let connections = RwSignal::new(Vec::<SshConnection>::new());
@@ -29,7 +45,7 @@ pub fn Layout() -> impl IntoView {
     let form_state = RwSignal::new(FormState::Closed);
     let deleting = RwSignal::new(Option::<SshConnection>::None);
     let error_banner = RwSignal::new(Option::<String>::None);
-    let active_session = RwSignal::new(Option::<ActiveSession>::None);
+    let active_view = RwSignal::new(Option::<ActiveView>::None);
     let session_counter = RwSignal::new(0_u64);
 
     let reload = move || {
@@ -56,22 +72,31 @@ pub fn Layout() -> impl IntoView {
             });
         });
 
-        active_session.update(|session| {
-            if let Some(active) = session {
-                if active.connection.id == conn.id {
-                    active.connection = conn.clone();
+        active_view.update(|view| {
+            if let Some(active) = view {
+                let session = active.session_mut();
+                if session.connection.id == conn.id {
+                    session.connection = conn.clone();
                 }
             }
         });
     };
 
-    let open_session = move |conn: SshConnection| {
+    let next_session = move |conn: SshConnection| {
         let next = session_counter.get() + 1;
         session_counter.set(next);
-        active_session.set(Some(ActiveSession {
+        ActiveSession {
             connection: conn,
             instance_id: next,
-        }));
+        }
+    };
+
+    let open_terminal = move |conn: SshConnection| {
+        active_view.set(Some(ActiveView::Terminal(next_session(conn))));
+    };
+
+    let open_sftp = move |conn: SshConnection| {
+        active_view.set(Some(ActiveView::Sftp(next_session(conn))));
     };
 
     let on_saved = Callback::new(move |(conn, connect): (SshConnection, bool)| {
@@ -80,7 +105,7 @@ pub fn Layout() -> impl IntoView {
         upsert_connection(conn.clone());
         reload();
         if connect {
-            open_session(conn);
+            open_terminal(conn);
         }
     });
 
@@ -94,7 +119,12 @@ pub fn Layout() -> impl IntoView {
 
     let on_connect = Callback::new(move |conn: SshConnection| {
         selected_id.set(Some(conn.id.clone()));
-        open_session(conn);
+        open_terminal(conn);
+    });
+
+    let on_open_sftp = Callback::new(move |conn: SshConnection| {
+        selected_id.set(Some(conn.id.clone()));
+        open_sftp(conn);
     });
 
     let confirm_delete = Callback::new(move |_| {
@@ -127,6 +157,7 @@ pub fn Layout() -> impl IntoView {
                         on_edit=on_edit
                         on_delete=on_delete
                         on_connect=on_connect
+                        on_open_sftp=on_open_sftp
                     />
                 </div>
                 <div class="sidebar-footer">
@@ -157,13 +188,23 @@ pub fn Layout() -> impl IntoView {
                             }
                         })
                 }}
-                {move || match active_session.get() {
-                    Some(session) => {
+                {move || match active_view.get() {
+                    Some(ActiveView::Terminal(session)) => {
                         view! {
                             <TerminalPanel
                                 connection=session.connection
                                 instance_id=session.instance_id
-                                on_close=Callback::new(move |_| active_session.set(None))
+                                on_close=Callback::new(move |_| active_view.set(None))
+                            />
+                        }
+                            .into_any()
+                    }
+                    Some(ActiveView::Sftp(session)) => {
+                        view! {
+                            <SftpPanel
+                                connection=session.connection
+                                instance_id=session.instance_id
+                                on_close=Callback::new(move |_| active_view.set(None))
                             />
                         }
                             .into_any()
@@ -172,7 +213,9 @@ pub fn Layout() -> impl IntoView {
                         view! {
                             <div class="main-placeholder">
                                 <p class="title">"Bem-vindo ao HostDeck"</p>
-                                <p>"Selecione uma conexão e clique em ▶ para abrir o terminal."</p>
+                                <p>
+                                    "Selecione uma conexão e clique em ▶ para o terminal ou 📁 para os arquivos."
+                                </p>
                             </div>
                         }
                             .into_any()

@@ -3,15 +3,15 @@ use tauri::ipc::Channel;
 use tokio::sync::{mpsc, oneshot};
 use zeroize::Zeroizing;
 
-use crate::domain::AuthMethod;
 use crate::error::{AppError, AppResult};
-use crate::infra::credential_store::password_ref;
 use crate::infra::db::Db;
 use crate::infra::sqlite_repository as repo;
-use crate::ssh::client::{AuthSpec, ConnectParams, connect};
+use crate::ssh::auth::resolve_auth;
+use crate::ssh::client::{AuthSpec, ConnectParams, TerminalPrompter, connect};
 use crate::ssh::events::TerminalEvent;
 use crate::ssh::registry::{SessionHandle, SessionInput, SessionRegistry};
 use crate::ssh::session::open_shell_and_bridge;
+use crate::sftp::registry::SftpRegistry;
 use crate::state::CredStore;
 
 /// Opens an interactive SSH shell using stored credentials.
@@ -32,32 +32,7 @@ pub async fn ssh_connect(
         repo::get(&conn, &connection_id)?
     };
 
-    let auth = match conn_data.auth_method {
-        AuthMethod::Password => {
-            let secret_ref = conn_data
-                .password_secret_key
-                .clone()
-                .unwrap_or_else(|| password_ref(&connection_id));
-            let password = store.0.get(&secret_ref)?.ok_or_else(|| {
-                AppError::Ssh(
-                    "Senha não encontrada no armazenamento seguro. \
-                     Edite a conexão e cadastre a senha novamente."
-                        .into(),
-                )
-            })?;
-            AuthSpec::Password(Zeroizing::new(password))
-        }
-        AuthMethod::PrivateKey => {
-            let path = conn_data.identity_file.clone().ok_or_else(|| {
-                AppError::Ssh("Conexão sem caminho de chave privada cadastrado.".into())
-            })?;
-            let passphrase = match &conn_data.key_passphrase_secret_key {
-                Some(secret_ref) => store.0.get(secret_ref)?.map(Zeroizing::new),
-                None => None,
-            };
-            AuthSpec::PrivateKey { path, passphrase }
-        }
-    };
+    let auth = resolve_auth(&conn_data, &store.0)?;
 
     start_session(
         &db,
@@ -155,14 +130,22 @@ pub async fn ssh_disconnect(
     Ok(())
 }
 
-/// Sends the user's TOFU host-key decision to the pending SSH session.
+/// Sends the user's TOFU host-key decision to the pending session.
+///
+/// Shared by terminal and SFTP sessions: `known_hosts` is common to both, so a
+/// single command routes the decision to whichever registry holds the pending
+/// confirmation for this `session_id`.
 #[tauri::command]
 pub async fn confirm_host_key(
     registry: State<'_, SessionRegistry>,
+    sftp_registry: State<'_, SftpRegistry>,
     session_id: String,
     accept: bool,
 ) -> AppResult<()> {
     if let Some(tx) = registry.take_host_key_tx(&session_id) {
+        let _ = tx.send(accept);
+    }
+    if let Some(tx) = sftp_registry.take_host_key_tx(&session_id) {
         let _ = tx.send(accept);
     }
     Ok(())
@@ -199,7 +182,8 @@ async fn start_session(
     log::info!("[{session_id}] iniciando conexão para {connection_id}");
 
     let result = async {
-        let handle = connect(db.handle(), params, on_event.clone(), host_key_rx).await?;
+        let prompter = Box::new(TerminalPrompter(on_event.clone()));
+        let handle = connect(db.handle(), params, prompter, host_key_rx).await?;
         log::info!("[{session_id}] autenticado; abrindo shell");
 
         {

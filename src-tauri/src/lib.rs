@@ -2,6 +2,7 @@ mod commands;
 mod domain;
 mod error;
 mod infra;
+mod sftp;
 mod ssh;
 mod state;
 
@@ -9,15 +10,17 @@ use std::sync::Arc;
 
 use tauri::Manager;
 
-use commands::{connection_commands, terminal_commands};
+use commands::{connection_commands, sftp_commands, terminal_commands};
 use infra::credential_store::SystemKeyring;
 use infra::db::Db;
+use sftp::registry::SftpRegistry;
 use ssh::registry::SessionRegistry;
 use state::CredStore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -32,6 +35,7 @@ pub fn run() {
             app.manage(db);
             app.manage(CredStore(Arc::new(SystemKeyring::new())));
             app.manage(SessionRegistry::default());
+            app.manage(SftpRegistry::default());
 
             Ok(())
         })
@@ -47,6 +51,18 @@ pub fn run() {
             terminal_commands::ssh_resize,
             terminal_commands::ssh_disconnect,
             terminal_commands::confirm_host_key,
+            sftp_commands::sftp_connect,
+            sftp_commands::sftp_connect_with_password,
+            sftp_commands::sftp_realpath,
+            sftp_commands::sftp_list_dir,
+            sftp_commands::sftp_download,
+            sftp_commands::sftp_upload,
+            sftp_commands::sftp_mkdir,
+            sftp_commands::sftp_rename,
+            sftp_commands::sftp_remove_file,
+            sftp_commands::sftp_remove_dir,
+            sftp_commands::sftp_cancel_transfer,
+            sftp_commands::sftp_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

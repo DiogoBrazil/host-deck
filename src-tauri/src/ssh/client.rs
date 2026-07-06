@@ -18,6 +18,28 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Maximum time allowed for the first-connection host-key prompt.
 const HOST_KEY_CONFIRM_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// Channel-agnostic sink for the first-connection host-key confirmation prompt.
+///
+/// Terminal and SFTP sessions send the same TOFU fingerprint prompt over their
+/// own event channels; `connect` only needs to trigger it, not know which one.
+pub trait HostKeyPrompter: Send {
+    fn prompt(&self, fingerprint: String, key_type: String) -> AppResult<()>;
+}
+
+/// `HostKeyPrompter` backed by a terminal event channel.
+pub struct TerminalPrompter(pub Channel<TerminalEvent>);
+
+impl HostKeyPrompter for TerminalPrompter {
+    fn prompt(&self, fingerprint: String, key_type: String) -> AppResult<()> {
+        self.0
+            .send(TerminalEvent::HostKeyPrompt {
+                fingerprint,
+                key_type,
+            })
+            .map_err(|e| AppError::Internal(format!("enviando evento: {e}")))
+    }
+}
+
 pub enum AuthSpec {
     Password(Zeroizing<String>),
     PrivateKey {
@@ -38,7 +60,7 @@ pub struct TofuHandler {
     db: Arc<Mutex<Connection>>,
     host: String,
     port: u16,
-    events: Channel<TerminalEvent>,
+    prompter: Box<dyn HostKeyPrompter>,
     /// Receives the user's decision from `confirm_host_key`.
     confirm_rx: Option<oneshot::Receiver<bool>>,
 }
@@ -70,12 +92,8 @@ impl client::Handler for TofuHandler {
                     self.host,
                     self.port
                 );
-                self.events
-                    .send(TerminalEvent::HostKeyPrompt {
-                        fingerprint: host_key::fingerprint(key),
-                        key_type: host_key::key_type(key),
-                    })
-                    .map_err(|e| AppError::Internal(format!("enviando evento: {e}")))?;
+                self.prompter
+                    .prompt(host_key::fingerprint(key), host_key::key_type(key))?;
 
                 let accepted =
                     match tokio::time::timeout(HOST_KEY_CONFIRM_TIMEOUT, confirm_rx).await {
@@ -118,7 +136,7 @@ fn friendly_ssh_error(e: &russh::Error) -> AppError {
 pub async fn connect(
     db: Arc<Mutex<Connection>>,
     params: ConnectParams,
-    events: Channel<TerminalEvent>,
+    prompter: Box<dyn HostKeyPrompter>,
     confirm_rx: oneshot::Receiver<bool>,
 ) -> AppResult<Handle<TofuHandler>> {
     let addr = format!("{}:{}", params.host, params.port);
@@ -133,7 +151,7 @@ pub async fn connect(
         db,
         host: params.host.clone(),
         port: params.port,
-        events,
+        prompter,
         confirm_rx: Some(confirm_rx),
     };
 
