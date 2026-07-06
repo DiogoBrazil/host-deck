@@ -486,6 +486,22 @@ Verifique:
 - Preferir mudanças pequenas e testáveis nos limites atuais de domínio, infra,
   commands e UI.
 
+## Contribuindo
+
+Contribuições são bem-vindas. Para manter o histórico organizado e facilitar a
+revisão, use o fluxo abaixo:
+
+1. Clone o repositório.
+2. Faça checkout da branch `development`.
+3. Crie uma branch específica para a sua alteração, com nome descritivo.
+4. Implemente e teste as mudanças localmente.
+5. Envie a branch para o GitHub.
+6. Abra um pull request apontando para `development`.
+
+Evite abrir pull requests diretamente para a branch principal. Caso encontre
+problemas de permissão para enviar commits ou branches, entre em contato com o
+proprietário do repositório.
+
 ## Licença
 
 Este projeto é distribuído sob a licença MIT.
