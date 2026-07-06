@@ -1,14 +1,13 @@
 name: build
 
 # Compila o app Tauri para Linux e Windows.
-# - push/PR: gera os instaladores como artefatos do run (aba "Summary" > Artifacts).
-# - push de tag `v*` (ex.: v0.1.0): além dos artefatos, publica um GitHub Release.
+# Roda SÓ quando você quer gerar downloads — não em todo push:
+#   - push de tag `v*` (ex.: v0.1.0): gera os instaladores e publica um Release.
+#   - "Run workflow" (aba Actions): build manual sob demanda (só artefatos).
+# Use o script `scripts/release.ps1` para publicar uma nova versão.
 on:
   push:
-    branches: [main, SFTP]
     tags: ["v*"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 # Necessário para o softprops/action-gh-release criar a release em push de tag.
@@ -58,8 +57,18 @@ jobs:
       - name: Instalar cargo-binstall
         uses: cargo-bins/cargo-binstall@main
 
-      - name: Instalar trunk e tauri-cli
-        run: cargo binstall -y trunk tauri-cli
+      - name: Instalar trunk (binário pré-compilado)
+        run: cargo binstall -y trunk
+
+      # tauri-cli v2 nem sempre tem binário binstall-compatível; compilar do
+      # source garante o subcomando `cargo tauri` no runner.
+      - name: Instalar tauri-cli
+        run: cargo install tauri-cli --version "^2.0" --locked
+
+      - name: Verificar ferramentas
+        run: |
+          trunk --version
+          cargo tauri --version
 
       - name: Build do app
         run: cargo tauri build

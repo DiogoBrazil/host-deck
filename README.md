@@ -368,6 +368,38 @@ Configuração principal:
 Ícones e configuração de bundle ficam em `src-tauri/icons/` e
 `src-tauri/tauri.conf.json`.
 
+## Publicando uma nova versão (Release)
+
+Os instaladores para download são gerados pelo GitHub Actions
+(`.github/workflows/build.yml`). O workflow **não roda em todo push** — ele só é
+acionado ao publicar uma **tag `v*`** (ou manualmente pelo botão "Run workflow"
+na aba Actions).
+
+Para publicar, use o script — ele cuida de tudo (atualiza a versão nos arquivos,
+commita, cria a tag e faz push):
+
+```powershell
+# Mostra a versão atual
+.\scripts\release.ps1
+
+# Publica a versão 0.1.1 (cria e envia a tag v0.1.1)
+.\scripts\release.ps1 0.1.1
+```
+
+O script atualiza a versão em `Cargo.toml` (raiz), `src-tauri/Cargo.toml` e
+`src-tauri/tauri.conf.json`, faz o commit `release: v0.1.1`, cria a tag e envia
+tudo. Alguns minutos depois, os instaladores aparecem em
+[Releases](https://github.com/DiogoBrazil/host-deck/releases) (Windows `.msi`/
+`.exe` e Linux `.deb`/`.rpm`/`.AppImage`).
+
+> Equivalente manual, se preferir sem o script:
+> ```bash
+> # edite a versão nos 3 arquivos acima, então:
+> git commit -am "release: v0.1.1"
+> git tag v0.1.1
+> git push origin <branch> && git push origin v0.1.1
+> ```
+
 ## Troubleshooting
 
 ### `runtime do Tauri indisponível`
