@@ -10,6 +10,27 @@ O objetivo é oferecer uma alternativa simples e segura para organizar hosts,
 credenciais e sessões de terminal sem depender de shell local, concatenação de
 comandos ou armazenamento de senha em texto puro.
 
+## Download
+
+Os instaladores prontos ficam na página de **Releases**:
+
+**➡️ [github.com/DiogoBrazil/host-deck/releases/latest](https://github.com/DiogoBrazil/host-deck/releases/latest)**
+
+Escolha o arquivo conforme o seu sistema:
+
+| Sistema | Arquivo | Observação |
+|---|---|---|
+| **Windows** | `HostDeck_x.y.z_x64_en-US.msi` | Instalador padrão (recomendado) |
+| **Windows** | `HostDeck_x.y.z_x64-setup.exe` | Instalador alternativo (NSIS) |
+| **Linux** | `host-deck_x.y.z_amd64.AppImage` | Portátil — dê permissão de execução e rode |
+| **Linux** | `host-deck_x.y.z_amd64.deb` | Debian / Ubuntu |
+| **Linux** | `host-deck-x.y.z-1.x86_64.rpm` | Fedora / openSUSE |
+
+> Cada Release é gerada automaticamente pelo GitHub Actions
+> (`.github/workflows/build.yml`) ao publicar uma tag `v*`. Builds de
+> desenvolvimento (sem tag) ficam como *artifacts* na aba
+> [Actions](https://github.com/DiogoBrazil/host-deck/actions).
+
 ## Funcionalidades
 
 - Cadastro, edição, remoção e listagem de conexões SSH.
