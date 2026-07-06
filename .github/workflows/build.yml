@@ -1,0 +1,97 @@
+name: build
+
+# Compila o app Tauri para Linux e Windows.
+# - push/PR: gera os instaladores como artefatos do run (aba "Summary" > Artifacts).
+# - push de tag `v*` (ex.: v0.1.0): além dos artefatos, publica um GitHub Release.
+on:
+  push:
+    branches: [main, SFTP]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Necessário para o softprops/action-gh-release criar a release em push de tag.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04 # glibc mais antiga = AppImage roda em mais distros
+          - platform: windows-latest
+    runs-on: ${{ matrix.platform }}
+    env:
+      # russh -> aws-lc-sys precisa de NASM no Windows; usa os objetos pré-compilados
+      # que a crate já traz (no-op no Linux).
+      AWS_LC_SYS_PREBUILT_NASM: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependências de sistema (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential curl wget file \
+            libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev patchelf nasm
+
+      - name: Toolchain Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache do Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Dois workspaces independentes: o frontend (raiz) e o src-tauri.
+          workspaces: |
+            . -> target
+            src-tauri -> target
+
+      - name: Instalar cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Instalar trunk e tauri-cli
+        run: cargo binstall -y trunk tauri-cli
+
+      - name: Build do app
+        run: cargo tauri build
+
+      - name: Publicar artefatos (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hostdeck-linux
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+
+      - name: Publicar artefatos (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hostdeck-windows
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+
+      - name: Anexar à Release (somente em tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
