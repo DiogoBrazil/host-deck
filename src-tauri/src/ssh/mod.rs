@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod client;
 #[cfg(test)]
 mod e2e_tests;

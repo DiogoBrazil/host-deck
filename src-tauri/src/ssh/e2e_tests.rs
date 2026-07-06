@@ -17,7 +17,7 @@ use zeroize::Zeroizing;
 
 use crate::error::AppError;
 use crate::infra::db::Db;
-use crate::ssh::client::{AuthSpec, ConnectParams, connect};
+use crate::ssh::client::{AuthSpec, ConnectParams, TerminalPrompter, connect};
 use crate::ssh::registry::SessionInput;
 use crate::ssh::session::open_shell_and_bridge;
 
@@ -80,7 +80,12 @@ async fn ssh_e2e_password_shell_roundtrip() {
         }
     });
 
-    let handle = connect(db.handle(), params_password(PASSWORD), events.clone(), confirm_rx)
+    let handle = connect(
+        db.handle(),
+        params_password(PASSWORD),
+        Box::new(TerminalPrompter(events.clone())),
+        confirm_rx,
+    )
         .await
         .expect("conexão e autenticação devem funcionar");
 
@@ -137,7 +142,7 @@ async fn ssh_e2e_second_connection_skips_prompt() {
         let (events, rx_events) = test_channel();
         let (confirm_tx, confirm_rx) = oneshot::channel();
         let t = std::thread::spawn(move || auto_accept(&rx_events, confirm_tx));
-        connect(db.handle(), params_password(PASSWORD), events, confirm_rx)
+        connect(db.handle(), params_password(PASSWORD), Box::new(TerminalPrompter(events)), confirm_rx)
             .await
             .expect("primeira conexão");
         t.join().unwrap();
@@ -149,7 +154,7 @@ async fn ssh_e2e_second_connection_skips_prompt() {
         let (events, rx_events) = test_channel();
         let (_confirm_tx, confirm_rx) = oneshot::channel::<bool>();
         drop(_confirm_tx);
-        connect(db.handle(), params_password(PASSWORD), events, confirm_rx)
+        connect(db.handle(), params_password(PASSWORD), Box::new(TerminalPrompter(events)), confirm_rx)
             .await
             .expect("segunda conexão deve pular o prompt TOFU");
         let prompted = rx_events
@@ -167,7 +172,7 @@ async fn ssh_e2e_wrong_password_fails_with_friendly_error() {
     let (confirm_tx, confirm_rx) = oneshot::channel();
     let t = std::thread::spawn(move || auto_accept(&rx_events, confirm_tx));
 
-    let result = connect(db.handle(), params_password("senha-errada"), events, confirm_rx).await;
+    let result = connect(db.handle(), params_password("senha-errada"), Box::new(TerminalPrompter(events)), confirm_rx).await;
     t.join().unwrap();
 
     match result {
@@ -209,7 +214,7 @@ async fn ssh_e2e_changed_host_key_is_blocked() {
     let (events, _rx_events) = test_channel();
     let (_confirm_tx, confirm_rx) = oneshot::channel::<bool>();
 
-    let result = connect(db.handle(), params_password(PASSWORD), events, confirm_rx).await;
+    let result = connect(db.handle(), params_password(PASSWORD), Box::new(TerminalPrompter(events)), confirm_rx).await;
     match result {
         Err(AppError::Ssh(msg)) => assert!(
             msg.contains("ALERTA DE SEGURANÇA") || msg.contains("chave do servidor"),
@@ -244,7 +249,7 @@ async fn ssh_e2e_private_key_with_passphrase() {
         },
     };
 
-    connect(db.handle(), params, events, confirm_rx)
+    connect(db.handle(), params, Box::new(TerminalPrompter(events)), confirm_rx)
         .await
         .expect("autenticação por chave com passphrase deve funcionar");
     t.join().unwrap();

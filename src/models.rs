@@ -42,6 +42,26 @@ pub struct ConnectionInput {
     pub save_passphrase: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryKind {
+    File,
+    Dir,
+    Symlink,
+}
+
+/// Frontend mirror of the backend `RemoteEntry` (an SFTP directory entry).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteEntry {
+    pub name: String,
+    pub path: String,
+    pub kind: EntryKind,
+    pub size: u64,
+    pub modified: Option<i64>,
+    pub permissions: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct FieldError {
     pub field: String,
