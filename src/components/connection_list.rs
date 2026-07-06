@@ -10,6 +10,7 @@ pub fn ConnectionList(
     on_edit: Callback<SshConnection>,
     on_delete: Callback<SshConnection>,
     on_connect: Callback<SshConnection>,
+    on_open_sftp: Callback<SshConnection>,
 ) -> impl IntoView {
     let grouped = Memo::new(move |_| {
         let query = search.get().trim().to_lowercase();
@@ -80,6 +81,7 @@ pub fn ConnectionList(
                                     let conn_edit = conn.clone();
                                     let conn_delete = conn.clone();
                                     let conn_connect = conn.clone();
+                                    let conn_sftp = conn.clone();
                                     let id = conn.id.clone();
                                     let is_selected =
                                         move || selected_id.get().as_deref() == Some(id.as_str());
@@ -110,6 +112,16 @@ pub fn ConnectionList(
                                                     }
                                                 >
                                                     "▶"
+                                                </button>
+                                                <button
+                                                    class="icon-btn"
+                                                    title="Abrir arquivos"
+                                                    on:click=move |ev| {
+                                                        ev.stop_propagation();
+                                                        on_open_sftp.run(conn_sftp.clone());
+                                                    }
+                                                >
+                                                    "📁"
                                                 </button>
                                                 <button
                                                     class="icon-btn"

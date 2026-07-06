@@ -25,9 +25,12 @@ thiserror = "2.0.18"
 chrono = "0.4.45"
 keyring = { version = "3.6.3", features = ["sync-secret-service", "apple-native", "windows-native"] }
 russh = "0.62.1"
+russh-sftp = "2"
 base64 = "0.22.1"
 zeroize = "1.9.0"
-tokio = { version = "1.52.3", features = ["sync", "time", "net", "io-util", "macros"] }
+tokio = { version = "1.52.3", features = ["sync", "time", "net", "io-util", "macros", "fs"] }
+tokio-util = "0.7"
+tauri-plugin-dialog = "2"
 
 [dev-dependencies]
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "time"] }

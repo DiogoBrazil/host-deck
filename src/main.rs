@@ -3,6 +3,7 @@ mod app;
 mod bindings;
 mod components;
 mod models;
+mod sftp_api;
 
 use app::App;
 use leptos::prelude::*;

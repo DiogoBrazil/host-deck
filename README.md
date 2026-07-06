@@ -1,13 +1,35 @@
 # HostDeck
 
-HostDeck é um cliente desktop para gerenciar conexões SSH e abrir terminais
-interativos embutidos. O projeto foi construído com **Tauri v2 + Rust + Leptos
-(WASM)**, usa `russh` para falar SSH nativamente, `rusqlite` para persistência
-local e o keyring do sistema para armazenar segredos.
+HostDeck é um cliente desktop para gerenciar conexões SSH, abrir terminais
+interativos embutidos e transferir arquivos por SFTP. O projeto foi construído
+com **Tauri v2 + Rust + Leptos (WASM)**, usa `russh` para falar SSH nativamente,
+`rusqlite` para persistência local e o keyring do sistema para armazenar
+segredos.
 
 O objetivo é oferecer uma alternativa simples e segura para organizar hosts,
 credenciais e sessões de terminal sem depender de shell local, concatenação de
 comandos ou armazenamento de senha em texto puro.
+
+## Download
+
+Os instaladores prontos ficam na página de **Releases**:
+
+**➡️ [github.com/DiogoBrazil/host-deck/releases/latest](https://github.com/DiogoBrazil/host-deck/releases/latest)**
+
+Escolha o arquivo conforme o seu sistema:
+
+| Sistema | Arquivo | Observação |
+|---|---|---|
+| **Windows** | `HostDeck_x.y.z_x64_en-US.msi` | Instalador padrão (recomendado) |
+| **Windows** | `HostDeck_x.y.z_x64-setup.exe` | Instalador alternativo (NSIS) |
+| **Linux** | `host-deck_x.y.z_amd64.AppImage` | Portátil — dê permissão de execução e rode |
+| **Linux** | `host-deck_x.y.z_amd64.deb` | Debian / Ubuntu |
+| **Linux** | `host-deck-x.y.z-1.x86_64.rpm` | Fedora / openSUSE |
+
+> Cada Release é gerada automaticamente pelo GitHub Actions
+> (`.github/workflows/build.yml`) ao publicar uma tag `v*`. Builds de
+> desenvolvimento (sem tag) ficam como *artifacts* na aba
+> [Actions](https://github.com/DiogoBrazil/host-deck/actions).
 
 ## Funcionalidades
 
@@ -22,6 +44,14 @@ comandos ou armazenamento de senha em texto puro.
 - Armazenamento seguro de senha/passphrase no keyring do sistema.
 - SQLite local contendo apenas metadados e referências para os segredos.
 
+### Em desenvolvimento
+
+- Transferência de arquivos por **SFTP**, reaproveitando a mesma conexão SSH,
+  o TOFU de host key e as credenciais já cadastradas. Navegador de arquivos
+  remoto com listagem, navegação, upload, download, criar pasta, renomear e
+  remover. O desenho completo está em
+  [docs/SFTP_SPEC.md](docs/SFTP_SPEC.md).
+
 ## Stack Técnica
 
 - **Tauri v2**: shell desktop, IPC, empacotamento e integração com o sistema.
@@ -30,6 +60,9 @@ comandos ou armazenamento de senha em texto puro.
 - **Trunk**: build/dev server do frontend.
 - **xterm.js**: terminal no WebView.
 - **russh**: implementação SSH nativa em Rust.
+- **russh-sftp** *(planejado)*: cliente SFTP sobre o channel SSH do russh.
+- **tauri-plugin-dialog** *(planejado)*: seleção de caminho local para
+  upload/download.
 - **rusqlite**: banco local SQLite com SQLite bundled.
 - **keyring**: Secret Service, Keychain ou Credential Manager.
 - **tokio**: tarefas assíncronas, canais e rede.
@@ -62,6 +95,8 @@ SSH ativas.
 
 ```text
 .
+├── docs/
+│   └── SFTP_SPEC.md             # Especificação da transferência via SFTP
 ├── src/                         # Frontend Leptos/WASM
 │   ├── api.rs                   # Wrapper das chamadas IPC de CRUD
 │   ├── bindings/                # Bindings Tauri e terminal JS
@@ -78,6 +113,7 @@ SSH ativas.
 │   │   ├── domain/              # Tipos e validação de domínio
 │   │   ├── infra/               # SQLite e keyring
 │   │   ├── ssh/                 # Cliente SSH, TOFU, sessões e eventos
+│   │   ├── sftp/                # Cliente SFTP e transferências (planejado)
 │   │   ├── error.rs             # Erros serializados para o frontend
 │   │   ├── lib.rs               # Setup Tauri e registro de commands
 │   │   └── state.rs             # Estado compartilhado
@@ -224,6 +260,18 @@ A combinação `(host, port, key_type)` é única.
 - `ssh_disconnect`: encerra a sessão.
 - `confirm_host_key`: responde ao prompt TOFU.
 
+### SFTP *(planejado)*
+
+Conjunto de commands para o navegador de arquivos, reaproveitando a conexão SSH
+e o TOFU. Detalhes e assinaturas em [docs/SFTP_SPEC.md](docs/SFTP_SPEC.md).
+
+- `sftp_connect` / `sftp_connect_with_password`: abre o subsistema SFTP.
+- `sftp_realpath`: resolve o diretório home e caminhos canônicos.
+- `sftp_list_dir`: lista um diretório remoto.
+- `sftp_download` / `sftp_upload`: transferências com progresso via evento.
+- `sftp_mkdir`, `sftp_rename`, `sftp_remove_file`, `sftp_remove_dir`: gerência.
+- `sftp_disconnect`: encerra a sessão SFTP.
+
 ## Segurança
 
 - Segredos não são gravados no SQLite.
@@ -320,6 +368,39 @@ Configuração principal:
 Ícones e configuração de bundle ficam em `src-tauri/icons/` e
 `src-tauri/tauri.conf.json`.
 
+## Publicando uma nova versão (Release)
+
+Os instaladores para download são gerados pelo GitHub Actions
+(`.github/workflows/build.yml`). O workflow **não roda em todo push** — ele só é
+acionado ao publicar uma **tag `v*`** (ou manualmente pelo botão "Run workflow"
+na aba Actions).
+
+Para publicar, use o script — ele **calcula a próxima versão sozinho** a partir
+do registro `scripts/releases.json`. No Windows, rode pelo Git Bash:
+
+```bash
+bash scripts/release.sh          # incrementa o patch (0.1.0 -> 0.1.1)
+bash scripts/release.sh minor    # 0.1.3 -> 0.2.0
+bash scripts/release.sh major    # 0.4.2 -> 1.0.0
+bash scripts/release.sh 1.2.3    # versão explícita
+bash scripts/release.sh show     # só mostra as versões, sem publicar
+```
+
+O script, em um único commit `release: vX.Y.Z`:
+
+1. lê a última versão em `scripts/releases.json` e calcula a próxima;
+2. atualiza a versão em `Cargo.toml` (raiz), `src-tauri/Cargo.toml` e
+   `src-tauri/tauri.conf.json`;
+3. registra a nova versão em `scripts/releases.json` (histórico, mais novo no topo);
+4. cria a tag e faz push da branch + tag.
+
+Alguns minutos depois, os instaladores aparecem em
+[Releases](https://github.com/DiogoBrazil/host-deck/releases) (Windows `.msi`/
+`.exe` e Linux `.deb`/`.rpm`/`.AppImage`).
+
+O arquivo `scripts/releases.json` é a fonte da verdade do versionamento — o
+script sempre parte da última entrada dele para o próximo número.
+
 ## Troubleshooting
 
 ### `runtime do Tauri indisponível`
@@ -365,6 +446,8 @@ Verifique:
 - Não há importação/exportação de conexões.
 - Não há suporte explícito a jump host, agent forwarding ou múltiplas abas de
   terminal.
+- A transferência de arquivos por SFTP está especificada
+  ([docs/SFTP_SPEC.md](docs/SFTP_SPEC.md)) mas ainda não implementada.
 
 ## Convenções de Manutenção
 
