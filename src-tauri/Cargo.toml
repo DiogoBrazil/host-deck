@@ -30,6 +30,10 @@ base64 = "0.22.1"
 zeroize = "1.9.0"
 tokio = { version = "1.52.3", features = ["sync", "time", "net", "io-util", "macros", "fs"] }
 tokio-util = "0.7"
+# rustls with aws-lc-rs, which russh already pulls (see AWS_LC_SYS_PREBUILT_NASM).
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls-native-roots"] }
+futures-util = { version = "0.3", default-features = false }
+async-trait = "0.1"
 tauri-plugin-dialog = "2"
 
 [dev-dependencies]

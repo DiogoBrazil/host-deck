@@ -214,6 +214,23 @@ mod tests {
     }
 
     #[test]
+    fn accepts_openrouter_kind_after_migration_006() {
+        let db = Db::open_in_memory().unwrap();
+        let conn = db.0.lock().unwrap();
+
+        let mut input = sample("OpenRouter");
+        input.kind = ProviderKind::Openrouter;
+        let created = insert(&conn, &input).unwrap();
+        assert_eq!(created.kind, ProviderKind::Openrouter);
+
+        // The table rebuild in migration 006 must leave foreign_keys enabled.
+        let fk: i64 = conn
+            .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(fk, 1);
+    }
+
+    #[test]
     fn rejects_invalid_kind_via_check_constraint() {
         let db = Db::open_in_memory().unwrap();
         let conn = db.0.lock().unwrap();

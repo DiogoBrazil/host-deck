@@ -7,6 +7,7 @@ use super::FieldError;
 pub enum ProviderKind {
     Anthropic,
     Openai,
+    Openrouter,
 }
 
 impl ProviderKind {
@@ -14,6 +15,7 @@ impl ProviderKind {
         match self {
             ProviderKind::Anthropic => "anthropic",
             ProviderKind::Openai => "openai",
+            ProviderKind::Openrouter => "openrouter",
         }
     }
 
@@ -21,6 +23,7 @@ impl ProviderKind {
         match s {
             "anthropic" => Some(ProviderKind::Anthropic),
             "openai" => Some(ProviderKind::Openai),
+            "openrouter" => Some(ProviderKind::Openrouter),
             _ => None,
         }
     }
@@ -95,6 +98,7 @@ impl ProviderInput {
                 match self.kind {
                     ProviderKind::Anthropic => "Anthropic".to_string(),
                     ProviderKind::Openai => "OpenAI".to_string(),
+                    ProviderKind::Openrouter => "OpenRouter".to_string(),
                 }
             } else {
                 trimmed.to_string()
@@ -152,6 +156,9 @@ mod tests {
         let mut input = base_input();
         input.kind = ProviderKind::Openai;
         assert_eq!(input.validate().unwrap().label, "OpenAI");
+
+        input.kind = ProviderKind::Openrouter;
+        assert_eq!(input.validate().unwrap().label, "OpenRouter");
     }
 
     #[test]
@@ -179,7 +186,12 @@ mod tests {
         // The frontend and the `kind` CHECK constraint depend on these names.
         assert_eq!(ProviderKind::Anthropic.as_str(), "anthropic");
         assert_eq!(ProviderKind::Openai.as_str(), "openai");
+        assert_eq!(ProviderKind::Openrouter.as_str(), "openrouter");
         assert_eq!(ProviderKind::parse("openai"), Some(ProviderKind::Openai));
+        assert_eq!(
+            ProviderKind::parse("openrouter"),
+            Some(ProviderKind::Openrouter)
+        );
         assert_eq!(ProviderKind::parse("gemini"), None);
 
         let json = serde_json::to_string(&ProviderKind::Anthropic).unwrap();

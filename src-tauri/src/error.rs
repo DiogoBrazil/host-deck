@@ -26,6 +26,9 @@ pub enum AppError {
     #[error("{0}")]
     Ssh(String),
 
+    #[error("{0}")]
+    Agent(String),
+
     #[error("erro interno: {0}")]
     Internal(String),
 }
