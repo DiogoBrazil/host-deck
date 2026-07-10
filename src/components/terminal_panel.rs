@@ -3,6 +3,7 @@ use leptos::task::spawn_local;
 use wasm_bindgen::prelude::*;
 
 use crate::bindings::terminal::{TerminalHandle, start_terminal};
+use crate::components::agent_panel::AgentPanel;
 use crate::models::SshConnection;
 
 #[derive(Clone, PartialEq)]
@@ -23,6 +24,10 @@ pub fn TerminalPanel(
     let host_key_prompt = RwSignal::new(Option::<HostKeyInfo>::None);
     // TerminalHandle is not Send, so it must stay in the local reactive runtime.
     let handle = StoredValue::new_local(Option::<TerminalHandle>::None);
+    // Session id do backend, disponível assim que o handle existe; o painel
+    // do agente endereça a sessão por ele.
+    let session_id = RwSignal::new(Option::<String>::None);
+    let agent_open = RwSignal::new(false);
 
     let conn_id = connection.id.clone();
     let container_id = format!("terminal-container-{instance_id}");
@@ -31,6 +36,7 @@ pub fn TerminalPanel(
         "{} — {}@{}:{}",
         connection.name, connection.username, connection.host, connection.port
     );
+    let agent_connection = StoredValue::new(connection);
 
     Effect::new(move |_| {
         let conn_id = conn_id.clone();
@@ -56,7 +62,11 @@ pub fn TerminalPanel(
         let on_status = on_status.into_js_value();
         spawn_local(async move {
             match start_terminal(&container_id, &conn_id, &on_status).await {
-                Ok(h) => handle.set_value(Some(h.unchecked_into::<TerminalHandle>())),
+                Ok(h) => {
+                    let h = h.unchecked_into::<TerminalHandle>();
+                    session_id.set(Some(h.get_session_id()));
+                    handle.set_value(Some(h));
+                }
                 Err(err) => {
                     status.set(Status::Error(format!("Falha ao iniciar terminal: {err:?}")))
                 }
@@ -107,6 +117,14 @@ pub fn TerminalPanel(
                     <span class="status-label">{move || status_badge().1}</span>
                 </div>
                 <div class="terminal-actions">
+                    <button
+                        class="btn btn-sm"
+                        class:btn-primary=move || agent_open.get()
+                        disabled=move || session_id.get().is_none()
+                        on:click=move |_| agent_open.update(|open| *open = !*open)
+                    >
+                        "Agente"
+                    </button>
                     <button class="btn btn-sm" on:click=leave>
                         {move || {
                             if status.get() == Status::Connected {
@@ -129,7 +147,22 @@ pub fn TerminalPanel(
                 _ => None,
             }}
 
-            <div id=container_id class="terminal-container"></div>
+            <div class="terminal-body">
+                <div id=container_id class="terminal-container"></div>
+                {move || {
+                    agent_open
+                        .get()
+                        .then(|| {
+                            view! {
+                                <AgentPanel
+                                    connection=agent_connection.get_value()
+                                    session_id=session_id.into()
+                                    on_close=Callback::new(move |_| agent_open.set(false))
+                                />
+                            }
+                        })
+                }}
+            </div>
 
             {move || {
                 host_key_prompt

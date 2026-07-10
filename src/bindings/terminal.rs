@@ -14,6 +14,9 @@ extern "C" {
     /// Handle returned by startTerminal.
     pub type TerminalHandle;
 
+    #[wasm_bindgen(method, js_name = getSessionId)]
+    pub fn get_session_id(this: &TerminalHandle) -> String;
+
     #[wasm_bindgen(method, js_name = confirmHostKey)]
     pub fn confirm_host_key(this: &TerminalHandle, accept: bool);
 

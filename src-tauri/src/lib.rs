@@ -12,7 +12,9 @@ use std::sync::Arc;
 use tauri::Manager;
 
 use agent::registry::AgentRegistry;
-use commands::{agent_commands, connection_commands, sftp_commands, terminal_commands};
+use commands::{
+    agent_commands, connection_commands, provider_commands, sftp_commands, terminal_commands,
+};
 use infra::credential_store::SystemKeyring;
 use infra::db::Db;
 use sftp::registry::SftpRegistry;
@@ -70,6 +72,12 @@ pub fn run() {
             agent_commands::agent_cancel,
             agent_commands::confirm_agent_command,
             agent_commands::agent_refresh_models,
+            provider_commands::list_providers,
+            provider_commands::create_provider,
+            provider_commands::update_provider,
+            provider_commands::delete_provider,
+            provider_commands::list_cached_models,
+            provider_commands::set_connection_provider,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

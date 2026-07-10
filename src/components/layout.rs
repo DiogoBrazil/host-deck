@@ -5,6 +5,7 @@ use crate::api;
 use crate::components::confirm_dialog::ConfirmDialog;
 use crate::components::connection_form::ConnectionForm;
 use crate::components::connection_list::ConnectionList;
+use crate::components::provider_settings::ProviderSettings;
 use crate::components::sftp_panel::SftpPanel;
 use crate::components::terminal_panel::TerminalPanel;
 use crate::models::SshConnection;
@@ -47,6 +48,7 @@ pub fn Layout() -> impl IntoView {
     let error_banner = RwSignal::new(Option::<String>::None);
     let active_view = RwSignal::new(Option::<ActiveView>::None);
     let session_counter = RwSignal::new(0_u64);
+    let providers_open = RwSignal::new(false);
 
     let reload = move || {
         spawn_local(async move {
@@ -167,6 +169,12 @@ pub fn Layout() -> impl IntoView {
                     >
                         "+ Nova conexão"
                     </button>
+                    <button
+                        class="btn btn-block"
+                        on:click=move |_| providers_open.set(true)
+                    >
+                        "Provedores de IA"
+                    </button>
                 </div>
             </aside>
 
@@ -247,6 +255,18 @@ pub fn Layout() -> impl IntoView {
                         },
                     )
                 }
+            }}
+
+            {move || {
+                providers_open
+                    .get()
+                    .then(|| {
+                        view! {
+                            <ProviderSettings on_close=Callback::new(move |_| {
+                                providers_open.set(false)
+                            }) />
+                        }
+                    })
             }}
 
             {move || {

@@ -74,6 +74,9 @@ body {
 }
 
 .sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px;
   border-top: 1px solid var(--border);
 }
@@ -639,4 +642,234 @@ button {
   color: var(--text-dim);
   text-align: center;
   font-size: 0.85rem;
+}
+
+/* Agent panel */
+
+.terminal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.agent-panel {
+  width: 380px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+}
+
+.agent-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.agent-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  padding: 4px 6px;
+}
+
+.agent-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px;
+}
+
+.agent-empty {
+  margin: auto;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  padding: 0 16px;
+}
+
+.agent-empty .hint {
+  font-size: 0.78rem;
+  margin-top: 8px;
+}
+
+.agent-msg {
+  max-width: 92%;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.agent-msg.hidden {
+  display: none;
+}
+
+.agent-msg.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+}
+
+.agent-msg.assistant {
+  align-self: flex-start;
+  background: var(--bg-hover);
+}
+
+.agent-msg.error {
+  align-self: stretch;
+  background: rgba(229, 83, 75, 0.12);
+  border: 1px solid var(--danger);
+}
+
+.agent-thinking {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-style: italic;
+  margin-bottom: 4px;
+}
+
+.agent-tool {
+  align-self: flex-start;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  max-width: 92%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-working {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  padding: 0 2px;
+}
+
+.agent-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  font-size: 0.85rem;
+}
+
+/* O comando proposto pelo agente vem com quebras de linha no modal. */
+.agent-panel .confirm-message {
+  white-space: pre-line;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.82rem;
+  user-select: text;
+}
+
+/* Provider settings */
+
+.modal-lg {
+  width: min(680px, calc(100vw - 48px));
+}
+
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.provider-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.provider-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.provider-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.provider-meta {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.provider-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.model-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.model-row > select,
+.model-row > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-row > .btn {
+  flex-shrink: 0;
+}
+
+.model-price {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.form-notice {
+  background: rgba(70, 167, 88, 0.12);
+  border: 1px solid var(--success);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+}
+
+.form-field .hint {
+  font-size: 0.75rem;
+  color: var(--text-dim);
 }

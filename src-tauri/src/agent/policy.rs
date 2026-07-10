@@ -20,11 +20,15 @@ pub enum CommandPolicy {
 /// Comandos cuja invocação simples (sem metacaracteres de shell) não muda
 /// estado no servidor. Deliberadamente curto: ficam de fora comandos com
 /// flags mutantes (`date -s`, `dmesg -C`, `find -delete`, `journalctl
-/// --vacuum-*`) e os que executam terceiros (`env`, `xargs`, `watch`).
+/// --vacuum-*`, `sort -o`, `uniq saida`), os que executam terceiros (`env`,
+/// `xargs`, `watch`) e os interativos (`top`, `less`). Revisado em
+/// 2026-07-10: mantido o desenho allowlist + metacaracteres; acrescentados
+/// apenas inspecionadores de rede/hardware sem flag de escrita.
 const READ_ONLY: &[&str] = &[
     "ls", "cat", "head", "tail", "wc", "grep", "stat", "file", "pwd", "whoami", "id", "uname",
     "hostname", "uptime", "df", "du", "free", "ps", "w", "last", "which", "whereis", "lsblk",
-    "lscpu", "echo",
+    "lscpu", "echo", "ss", "lsof", "printenv", "nproc", "lsmod", "findmnt", "lspci", "lsusb",
+    "md5sum", "sha256sum",
 ];
 
 /// Classifica um comando de shell.
@@ -67,6 +71,9 @@ mod tests {
         assert_eq!(classify("  df -h  "), CommandPolicy::ReadOnly);
         assert_eq!(classify("/usr/bin/ls -la /etc"), CommandPolicy::ReadOnly);
         assert_eq!(classify("grep -r TODO src"), CommandPolicy::ReadOnly);
+        assert_eq!(classify("ss -tlnp"), CommandPolicy::ReadOnly);
+        assert_eq!(classify("lsof -i :443"), CommandPolicy::ReadOnly);
+        assert_eq!(classify("sha256sum /etc/passwd"), CommandPolicy::ReadOnly);
     }
 
     #[test]
