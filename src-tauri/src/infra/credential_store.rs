@@ -8,6 +8,15 @@ pub fn passphrase_ref(connection_id: &str) -> String {
     format!("key-passphrase:{connection_id}")
 }
 
+/// Keyring reference for an agent provider's API key.
+///
+/// The key itself never touches SQLite; the database stores only this
+/// reference. When the keyring is unavailable the caller must surface
+/// `AppError::CredentialStoreUnavailable` — there is no database fallback.
+pub fn api_key_ref(provider_id: &str) -> String {
+    format!("agent-api-key:{provider_id}")
+}
+
 /// Abstraction over the OS credential store, with a mock implementation for tests.
 pub trait CredentialStore: Send + Sync {
     fn set(&self, entry_ref: &str, secret: &str) -> AppResult<()>;

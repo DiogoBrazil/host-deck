@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use tauri::State;
 use tauri::ipc::Channel;
 use tokio::sync::{mpsc, oneshot};
@@ -10,6 +12,7 @@ use crate::ssh::auth::resolve_auth;
 use crate::ssh::client::{AuthSpec, ConnectParams, TerminalPrompter, connect};
 use crate::ssh::events::TerminalEvent;
 use crate::ssh::registry::{SessionHandle, SessionInput, SessionRegistry};
+use crate::ssh::scrollback::Scrollback;
 use crate::ssh::session::open_shell_and_bridge;
 use crate::sftp::registry::SftpRegistry;
 use crate::state::CredStore;
@@ -170,6 +173,7 @@ async fn start_session(
 
     let (input_tx, input_rx) = mpsc::channel::<SessionInput>(64);
     let (host_key_tx, host_key_rx) = oneshot::channel::<bool>();
+    let scrollback = Arc::new(Mutex::new(Scrollback::default()));
 
     // Register before connecting; TOFU prompts must be routed to this session.
     registry.insert(
@@ -177,14 +181,19 @@ async fn start_session(
         SessionHandle {
             input_tx,
             host_key_tx: Some(host_key_tx),
+            ssh: None,
+            scrollback: scrollback.clone(),
         },
     );
     log::info!("[{session_id}] iniciando conexão para {connection_id}");
 
     let result = async {
         let prompter = Box::new(TerminalPrompter(on_event.clone()));
-        let handle = connect(db.handle(), params, prompter, host_key_rx).await?;
+        let handle = Arc::new(connect(db.handle(), params, prompter, host_key_rx).await?);
         log::info!("[{session_id}] autenticado; abrindo shell");
+
+        // Retained so the agent can open `exec` channels on this connection.
+        registry.set_ssh_handle(&session_id, handle.clone());
 
         {
             let conn = db.0.lock().unwrap();
@@ -193,9 +202,17 @@ async fn start_session(
 
         let sid = session_id.clone();
         let registry_for_cleanup = registry.clone();
-        open_shell_and_bridge(handle, cols, rows, on_event.clone(), input_rx, move || {
-            registry_for_cleanup.remove(&sid);
-        })
+        open_shell_and_bridge(
+            &handle,
+            cols,
+            rows,
+            on_event.clone(),
+            scrollback,
+            input_rx,
+            move || {
+                registry_for_cleanup.remove(&sid);
+            },
+        )
         .await?;
 
         Ok::<(), AppError>(())

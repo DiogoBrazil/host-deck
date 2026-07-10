@@ -99,9 +99,20 @@ async fn ssh_e2e_password_shell_roundtrip() {
     assert_eq!(count, 1, "host key deve ter sido salvo");
 
     let (input_tx, input_rx) = mpsc::channel(16);
-    open_shell_and_bridge(handle, 80, 24, events.clone(), input_rx, || {})
-        .await
-        .expect("PTY + shell devem abrir");
+    let scrollback = std::sync::Arc::new(std::sync::Mutex::new(
+        crate::ssh::scrollback::Scrollback::default(),
+    ));
+    open_shell_and_bridge(
+        &handle,
+        80,
+        24,
+        events.clone(),
+        scrollback.clone(),
+        input_rx,
+        || {},
+    )
+    .await
+    .expect("PTY + shell devem abrir");
 
     tokio::time::sleep(Duration::from_millis(1500)).await;
     input_tx
@@ -130,6 +141,13 @@ async fn ssh_e2e_password_shell_roundtrip() {
     assert!(
         text.contains("hostdeck-e2e-ok"),
         "saída do shell deve conter o echo; obtido: {text:?}"
+    );
+
+    let retained = scrollback.lock().unwrap().snapshot();
+    let retained_text = String::from_utf8_lossy(&retained);
+    assert!(
+        retained_text.contains("hostdeck-e2e-ok"),
+        "scrollback do backend deve reter a saída do shell"
     );
 }
 

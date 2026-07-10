@@ -6,7 +6,8 @@ use crate::domain::{AuthMethod, SshConnection, ssh_connection::ValidatedConnecti
 use crate::error::{AppError, AppResult};
 
 const COLUMNS: &str = "id, name, host, port, username, auth_method, identity_file, group_name, \
-     notes, password_secret_key, key_passphrase_secret_key, last_connected_at, created_at, updated_at";
+     notes, password_secret_key, key_passphrase_secret_key, provider_id, last_connected_at, \
+     created_at, updated_at";
 
 fn row_to_connection(row: &Row<'_>) -> rusqlite::Result<SshConnection> {
     let auth_raw: String = row.get("auth_method")?;
@@ -30,6 +31,7 @@ fn row_to_connection(row: &Row<'_>) -> rusqlite::Result<SshConnection> {
         notes: row.get("notes")?,
         password_secret_key: row.get("password_secret_key")?,
         key_passphrase_secret_key: row.get("key_passphrase_secret_key")?,
+        provider_id: row.get("provider_id")?,
         last_connected_at: row.get("last_connected_at")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
@@ -127,6 +129,18 @@ pub fn set_secret_refs(
     Ok(())
 }
 
+/// Binds (or clears) the AI provider used with this server.
+pub fn set_provider(conn: &Connection, id: &str, provider_id: Option<&str>) -> AppResult<()> {
+    let changed = conn.execute(
+        "UPDATE ssh_connections SET provider_id = ?2 WHERE id = ?1",
+        params![id, provider_id],
+    )?;
+    if changed == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(())
+}
+
 pub fn touch_last_connected(conn: &Connection, id: &str) -> AppResult<()> {
     conn.execute(
         "UPDATE ssh_connections SET last_connected_at = ?2 WHERE id = ?1",
@@ -190,6 +204,47 @@ mod tests {
         let fetched = get(&conn, &created.id).unwrap();
         assert_eq!(fetched.password_secret_key.as_deref(), Some("ssh-password:abc"));
         assert!(fetched.last_connected_at.is_some());
+    }
+
+    #[test]
+    fn provider_binding_and_set_null_on_provider_delete() {
+        use crate::domain::ProviderKind;
+        use crate::domain::agent_provider::ValidatedProvider;
+        use crate::infra::agent_repository;
+
+        let db = Db::open_in_memory().unwrap();
+        let conn = db.0.lock().unwrap();
+        let created = insert(&conn, &sample("VPS")).unwrap();
+        assert!(created.provider_id.is_none());
+
+        let provider = agent_repository::insert(
+            &conn,
+            &ValidatedProvider {
+                kind: ProviderKind::Anthropic,
+                label: "Anthropic".into(),
+                base_url: None,
+                model: None,
+            },
+        )
+        .unwrap();
+
+        set_provider(&conn, &created.id, Some(&provider.id)).unwrap();
+        assert_eq!(
+            get(&conn, &created.id).unwrap().provider_id,
+            Some(provider.id.clone())
+        );
+
+        // FK must reject an unknown provider.
+        assert!(set_provider(&conn, &created.id, Some("nao-existe")).is_err());
+
+        // Removing the provider unbinds the connection (ON DELETE SET NULL).
+        agent_repository::delete(&conn, &provider.id).unwrap();
+        assert!(get(&conn, &created.id).unwrap().provider_id.is_none());
+
+        assert!(matches!(
+            set_provider(&conn, "nao-existe", None),
+            Err(AppError::NotFound)
+        ));
     }
 
     #[test]

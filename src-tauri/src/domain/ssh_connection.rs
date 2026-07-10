@@ -21,6 +21,8 @@ pub struct SshConnection {
     pub notes: Option<String>,
     pub password_secret_key: Option<String>,
     pub key_passphrase_secret_key: Option<String>,
+    /// Optional AI provider bound to this server (see `agent_providers`).
+    pub provider_id: Option<String>,
     pub last_connected_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,

@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
 use russh::ChannelMsg;
@@ -9,13 +11,18 @@ use crate::error::{AppError, AppResult};
 use crate::ssh::client::TofuHandler;
 use crate::ssh::events::TerminalEvent;
 use crate::ssh::registry::SessionInput;
+use crate::ssh::scrollback::Scrollback;
 
 /// Opens a PTY-backed shell and bridges SSH I/O to the frontend.
+///
+/// The `handle` stays owned by the caller (registry), so the agent can open
+/// extra channels on the same connection while the shell is running.
 pub async fn open_shell_and_bridge(
-    handle: Handle<TofuHandler>,
+    handle: &Handle<TofuHandler>,
     cols: u32,
     rows: u32,
     events: Channel<TerminalEvent>,
+    scrollback: Arc<Mutex<Scrollback>>,
     mut input_rx: mpsc::Receiver<SessionInput>,
     on_finished: impl FnOnce() + Send + 'static,
 ) -> AppResult<()> {
@@ -52,11 +59,13 @@ pub async fn open_shell_and_bridge(
                 },
                 msg = channel.wait() => match msg {
                     Some(ChannelMsg::Data { ref data }) => {
+                        scrollback.lock().unwrap().push(data);
                         let _ = events.send(TerminalEvent::Output {
                             data: B64.encode(data),
                         });
                     }
                     Some(ChannelMsg::ExtendedData { ref data, .. }) => {
+                        scrollback.lock().unwrap().push(data);
                         let _ = events.send(TerminalEvent::Output {
                             data: B64.encode(data),
                         });
