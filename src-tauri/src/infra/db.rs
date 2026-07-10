@@ -15,6 +15,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../../migrations/004_create_agent_model_cache.sql"),
     include_str!("../../migrations/005_add_provider_to_ssh_connections.sql"),
     include_str!("../../migrations/006_allow_openrouter_kind.sql"),
+    include_str!("../../migrations/007_create_app_settings.sql"),
 ];
 
 pub struct Db(pub Arc<Mutex<Connection>>);

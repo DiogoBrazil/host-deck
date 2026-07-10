@@ -151,6 +151,8 @@ mod tests {
             messages: vec![],
             tools: vec![],
             max_tokens: 1024,
+            temperature: None,
+            thinking: false,
         };
 
         let received = Mutex::new(Vec::new());

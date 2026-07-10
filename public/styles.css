@@ -789,6 +789,59 @@ button {
   user-select: text;
 }
 
+/* Controles dirigidos por capacidade (temperature/thinking) */
+
+.agent-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.agent-control .agent-select {
+  flex: 0 1 auto;
+  width: auto;
+}
+
+/* Consentimento antes da primeira saída do conteúdo do terminal */
+
+.agent-consent {
+  width: min(560px, calc(100vw - 48px));
+}
+
+/* A explicação do consentimento é prosa, não comando. */
+.agent-panel .agent-consent .confirm-message {
+  font-family: inherit;
+  white-space: normal;
+  font-size: 0.85rem;
+}
+
+.agent-consent-preview {
+  max-height: 240px;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin: 10px 0;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
 /* Provider settings */
 
 .modal-lg {

@@ -11,6 +11,7 @@ pub mod models;
 pub mod policy;
 pub mod provider;
 pub mod providers;
+pub mod redact;
 pub mod registry;
 mod sse;
 pub mod tools;

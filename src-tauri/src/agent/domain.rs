@@ -97,6 +97,11 @@ pub struct TurnRequest {
     pub tools: Vec<ToolSpec>,
     /// Obrigatório na Anthropic; teto de saída nos demais.
     pub max_tokens: u32,
+    /// Só viaja quando o modelo anuncia suporte (a UI lê `capabilities`;
+    /// nos modelos atuais da Anthropic o parâmetro retorna 400).
+    pub temperature: Option<f64>,
+    /// Raciocínio estendido; cada adapter traduz para o seu formato de wire.
+    pub thinking: bool,
 }
 
 /// Metadados de um modelo, como devolvidos pelo endpoint de listagem.

@@ -135,6 +135,53 @@ impl ModelCacheEntry {
         };
         Some((per_token("prompt")? * 1e6, per_token("completion")? * 1e6))
     }
+
+    /// The controls below come from the capability tree, never from a model
+    /// list: current Anthropic models return 400 for `temperature`, older
+    /// ones accept it, and the OpenAI listing announces nothing. Absent
+    /// capability means the control is hidden and the parameter never sent.
+    pub fn supports_temperature(&self, kind: ProviderKind) -> bool {
+        match kind {
+            // The OpenAI listing is bare ids; temperature works across their
+            // chat models, so the control stays available.
+            ProviderKind::Openai => true,
+            ProviderKind::Openrouter => self.parameter_supported("temperature"),
+            ProviderKind::Anthropic => self.capability_flag("temperature"),
+        }
+    }
+
+    pub fn supports_thinking(&self, kind: ProviderKind) -> bool {
+        match kind {
+            ProviderKind::Openai => false,
+            ProviderKind::Openrouter => {
+                self.parameter_supported("reasoning")
+                    || self.parameter_supported("include_reasoning")
+            }
+            ProviderKind::Anthropic => self.capability_flag("thinking"),
+        }
+    }
+
+    fn capabilities_json(&self) -> serde_json::Value {
+        serde_json::from_str(&self.capabilities).unwrap_or(serde_json::Value::Null)
+    }
+
+    /// Anthropic-style flag: `{"thinking": true}` or `{"thinking": {"supported": true}}`.
+    fn capability_flag(&self, key: &str) -> bool {
+        let caps = self.capabilities_json();
+        match caps.get(key) {
+            Some(serde_json::Value::Bool(b)) => *b,
+            Some(node) => node.get("supported").and_then(|v| v.as_bool()) == Some(true),
+            None => false,
+        }
+    }
+
+    /// OpenRouter-style listing: `supported_parameters` array.
+    fn parameter_supported(&self, name: &str) -> bool {
+        self.capabilities_json()
+            .get("supported_parameters")
+            .and_then(|v| v.as_array())
+            .is_some_and(|params| params.iter().any(|p| p.as_str() == Some(name)))
+    }
 }
 
 /// One streamed event of an agent turn (mirror of the backend `AgentEvent`).

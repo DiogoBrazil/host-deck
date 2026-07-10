@@ -13,6 +13,8 @@ extern "C" {
         provider_id: &str,
         model: Option<String>,
         message: &str,
+        temperature: Option<f64>,
+        thinking: bool,
         on_event: &JsValue,
     ) -> Result<JsValue, JsValue>;
 }

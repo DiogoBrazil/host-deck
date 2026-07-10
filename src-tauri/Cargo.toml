@@ -34,6 +34,9 @@ tokio-util = "0.7"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls-native-roots"] }
 futures-util = { version = "0.3", default-features = false }
 async-trait = "0.1"
+# Redação de segredos no scrollback (agent::redact); a variante lite não puxa
+# dependências transitivas e o volume (24 KB por envio) não pede a regex cheia.
+regex-lite = "0.1"
 tauri-plugin-dialog = "2"
 
 [dev-dependencies]

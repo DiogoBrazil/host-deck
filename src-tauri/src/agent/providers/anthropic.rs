@@ -62,6 +62,15 @@ fn build_body(req: &TurnRequest) -> Value {
     if let Some(system) = &req.system {
         body["system"] = json!(system);
     }
+    if let Some(temperature) = req.temperature {
+        body["temperature"] = json!(temperature);
+    }
+    if req.thinking {
+        // Formato atual (adaptive); `budget_tokens` retorna 400 nos modelos
+        // novos. A UI só liga a flag quando `capabilities.thinking` anuncia
+        // suporte, então modelos antigos (só budget) ficam de fora.
+        body["thinking"] = json!({"type": "adaptive"});
+    }
     if !req.tools.is_empty() {
         body["tools"] = Value::Array(
             req.tools
@@ -355,6 +364,8 @@ mod tests {
                 input_schema: json!({"type": "object", "properties": {"command": {"type": "string"}}}),
             }],
             max_tokens: 4096,
+            temperature: None,
+            thinking: false,
         }
     }
 
@@ -378,6 +389,20 @@ mod tests {
         assert_eq!(messages[2]["role"], "user");
         assert_eq!(messages[2]["content"][0]["type"], "tool_result");
         assert_eq!(messages[2]["content"][0]["tool_use_id"], "toolu_1");
+    }
+
+    #[test]
+    fn temperature_and_thinking_only_travel_when_set() {
+        let bare = build_body(&sample_request());
+        assert!(bare.get("temperature").is_none());
+        assert!(bare.get("thinking").is_none());
+
+        let mut req = sample_request();
+        req.temperature = Some(0.3);
+        req.thinking = true;
+        let body = build_body(&req);
+        assert_eq!(body["temperature"], 0.3);
+        assert_eq!(body["thinking"]["type"], "adaptive");
     }
 
     fn apply_all(events: &[(&str, &str)]) -> (TurnAccumulator, Vec<StreamDelta>) {

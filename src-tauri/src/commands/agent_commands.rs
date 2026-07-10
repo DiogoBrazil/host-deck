@@ -8,6 +8,7 @@ use crate::agent::domain::AgentMessage;
 use crate::agent::events::{AgentEvent, SharedEventSink};
 use crate::agent::models::refresh_model_cache;
 use crate::agent::r#loop::{LoopConfig, LoopEnd, MAX_TURNS, run_loop};
+use crate::agent::redact::redact;
 use crate::agent::registry::AgentRegistry;
 use crate::agent::tools::SessionToolbox;
 use crate::domain::{AgentProvider as ProviderRecord, ModelCacheEntry};
@@ -15,6 +16,7 @@ use crate::error::{AppError, AppResult};
 use crate::infra::agent_repository;
 use crate::infra::credential_store::CredentialStore;
 use crate::infra::db::Db;
+use crate::infra::settings;
 use crate::ssh::registry::SessionRegistry;
 use crate::state::CredStore;
 
@@ -23,9 +25,10 @@ const MAX_TOKENS_DEFAULT: u32 = 4096;
 /// Teto de saída mesmo quando o modelo suporta mais; segura o custo por turno.
 const MAX_TOKENS_CAP: i64 = 8192;
 /// Quanto do fim do scrollback vai como contexto ao modelo.
-///
-/// Fase 4 adiciona redação de segredos e consentimento antes deste envio.
 const SCROLLBACK_CONTEXT_BYTES: usize = 24 * 1024;
+/// Chave em `app_settings`: consentimento de envio do terminal ao provedor.
+const CONSENT_KEY: &str = "agent_terminal_consent";
+const CONSENT_GRANTED: &str = "granted";
 
 /// Envia uma mensagem do usuário ao agente da sessão.
 ///
@@ -41,14 +44,25 @@ pub async fn agent_send(
     provider_id: String,
     model: Option<String>,
     message: String,
+    temperature: Option<f64>,
+    thinking: Option<bool>,
     on_event: Channel<AgentEvent>,
 ) -> AppResult<()> {
-    let (record, cached_models) = {
+    let (consented, record, cached_models) = {
         let conn = db.0.lock().unwrap();
+        let consented = settings::get(&conn, CONSENT_KEY)?.as_deref() == Some(CONSENT_GRANTED);
         let record = agent_repository::get(&conn, &provider_id)?;
         let cached = agent_repository::list_model_cache(&conn, &provider_id)?;
-        (record, cached)
+        (consented, record, cached)
     };
+
+    // A UI pede o consentimento antes de chamar; este é o cinto de segurança
+    // para nenhum caminho novo vazar o terminal sem a decisão do usuário.
+    if !consented {
+        return Err(AppError::Agent(
+            "O envio do contexto do terminal ainda não foi autorizado.".into(),
+        ));
+    }
 
     let api_key = resolve_api_key(&record, store.0.as_ref())?;
     let model = model
@@ -68,6 +82,8 @@ pub async fn agent_send(
         model,
         system: Some(build_system_prompt(&scrollback)),
         max_turns: MAX_TURNS,
+        temperature,
+        thinking: thinking.unwrap_or(false),
     };
 
     let mut history = agents.history_snapshot(&session_id);
@@ -144,6 +160,34 @@ pub async fn confirm_agent_command(
     Ok(())
 }
 
+/// Texto exatamente como iria ao provedor: cauda do scrollback, sem ANSI e
+/// com segredos redigidos. A UI o exibe no pedido de consentimento.
+#[tauri::command]
+pub async fn agent_context_preview(
+    sessions: State<'_, SessionRegistry>,
+    session_id: String,
+) -> AppResult<String> {
+    let scrollback = sessions
+        .scrollback_snapshot(&session_id)
+        .ok_or(AppError::NotFound)?;
+    Ok(scrollback_context(&scrollback))
+}
+
+/// Consentimento já registrado para enviar contexto do terminal?
+#[tauri::command]
+pub async fn get_agent_consent(db: State<'_, Db>) -> AppResult<bool> {
+    let conn = db.0.lock().unwrap();
+    Ok(settings::get(&conn, CONSENT_KEY)?.as_deref() == Some(CONSENT_GRANTED))
+}
+
+/// Registra (ou revoga) o consentimento; vale para todas as sessões.
+#[tauri::command]
+pub async fn set_agent_consent(db: State<'_, Db>, granted: bool) -> AppResult<()> {
+    let conn = db.0.lock().unwrap();
+    let value = if granted { CONSENT_GRANTED } else { "revoked" };
+    settings::set(&conn, CONSENT_KEY, value)
+}
+
 /// Busca a listagem de modelos no provedor e substitui o cache persistido.
 #[tauri::command]
 pub async fn agent_refresh_models(
@@ -180,6 +224,15 @@ fn max_tokens_for(cache: &[ModelCacheEntry], model: &str) -> u32 {
         .unwrap_or(MAX_TOKENS_DEFAULT)
 }
 
+/// Cauda do scrollback pronta para sair da máquina: ANSI removido e segredos
+/// redigidos. É a mesma função atrás do preview e do system prompt — o que o
+/// usuário autoriza é exatamente o que o provedor recebe.
+fn scrollback_context(scrollback: &[u8]) -> String {
+    let start = scrollback.len().saturating_sub(SCROLLBACK_CONTEXT_BYTES);
+    let tail = strip_ansi(&String::from_utf8_lossy(&scrollback[start..]));
+    redact(tail.trim())
+}
+
 fn build_system_prompt(scrollback: &[u8]) -> String {
     const PREAMBLE: &str = "You are an assistant embedded in an SSH terminal client. You help \
         the user inspect and operate the remote server of the current session. Investigate \
@@ -189,15 +242,14 @@ fn build_system_prompt(scrollback: &[u8]) -> String {
         Commands that change state require the user's confirmation and may be declined. Be \
         concise and answer in the user's language.";
 
-    let start = scrollback.len().saturating_sub(SCROLLBACK_CONTEXT_BYTES);
-    let tail = strip_ansi(&String::from_utf8_lossy(&scrollback[start..]));
-    let tail = tail.trim();
+    let tail = scrollback_context(scrollback);
     if tail.is_empty() {
         PREAMBLE.to_string()
     } else {
         format!(
             "{PREAMBLE}\n\nCurrent contents of the user's terminal (most recent output, \
-             possibly truncated):\n<terminal>\n{tail}\n</terminal>"
+             possibly truncated; [REDACTED] marks secrets removed before sending):\
+             \n<terminal>\n{tail}\n</terminal>"
         )
     }
 }
@@ -273,6 +325,14 @@ mod tests {
         // Sem scrollback, sem bloco de terminal.
         let prompt = build_system_prompt(b"");
         assert!(!prompt.contains("<terminal>"), "{prompt}");
+    }
+
+    #[test]
+    fn system_prompt_redacts_secrets_from_the_scrollback() {
+        let prompt = build_system_prompt(b"$ cat .env\r\nDB_PASSWORD=hunter2\r\nDB_HOST=db\r\n");
+        assert!(!prompt.contains("hunter2"), "{prompt}");
+        assert!(prompt.contains("[REDACTED]"), "{prompt}");
+        assert!(prompt.contains("DB_HOST=db"), "{prompt}");
     }
 
     #[test]

@@ -140,6 +140,19 @@ fn build_body(flavor: Flavor, req: &TurnRequest) -> Value {
         Flavor::OpenAi => body["max_completion_tokens"] = json!(req.max_tokens),
         Flavor::OpenRouter => body["max_tokens"] = json!(req.max_tokens),
     }
+    if let Some(temperature) = req.temperature {
+        body["temperature"] = json!(temperature);
+    }
+    if req.thinking {
+        match flavor {
+            // https://openrouter.ai/docs/use-cases/reasoning-tokens; os
+            // deltas voltam em `delta.reasoning` → StreamDelta::Thinking.
+            Flavor::OpenRouter => body["reasoning"] = json!({"enabled": true}),
+            // A listagem da OpenAI não anuncia capacidades, então a UI nunca
+            // liga a flag neste flavor; nada a enviar.
+            Flavor::OpenAi => {}
+        }
+    }
     if !req.tools.is_empty() {
         body["tools"] = Value::Array(
             req.tools
@@ -383,6 +396,8 @@ mod tests {
                 input_schema: json!({"type": "object"}),
             }],
             max_tokens: 4096,
+            temperature: None,
+            thinking: false,
         }
     }
 
@@ -416,6 +431,25 @@ mod tests {
         let body = build_body(Flavor::OpenAi, &sample_request());
         assert_eq!(body["max_completion_tokens"], 4096);
         assert!(body.get("max_tokens").is_none());
+    }
+
+    #[test]
+    fn temperature_and_thinking_only_travel_when_set() {
+        let bare = build_body(Flavor::OpenRouter, &sample_request());
+        assert!(bare.get("temperature").is_none());
+        assert!(bare.get("reasoning").is_none());
+
+        let mut req = sample_request();
+        req.temperature = Some(0.7);
+        req.thinking = true;
+        let body = build_body(Flavor::OpenRouter, &req);
+        assert_eq!(body["temperature"], 0.7);
+        assert_eq!(body["reasoning"]["enabled"], true);
+
+        // No flavor OpenAI o raciocínio não tem tradução; a flag é ignorada.
+        let body = build_body(Flavor::OpenAi, &req);
+        assert_eq!(body["temperature"], 0.7);
+        assert!(body.get("reasoning").is_none());
     }
 
     fn apply_all(datas: &[&str]) -> (TurnAccumulator, Vec<StreamDelta>) {

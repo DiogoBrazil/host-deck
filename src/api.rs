@@ -134,8 +134,27 @@ pub async fn set_connection_provider(
 
 // Agente
 
+#[derive(Serialize)]
+struct ConsentArgs {
+    granted: bool,
+}
+
 pub async fn agent_cancel(session_id: &str) -> Result<(), AppError> {
     invoke("agent_cancel", &SessionArgs { session_id }).await
+}
+
+/// Exatamente o texto do terminal que iria ao provedor (cauda do scrollback,
+/// sem ANSI, segredos redigidos); exibido no pedido de consentimento.
+pub async fn agent_context_preview(session_id: &str) -> Result<String, AppError> {
+    invoke("agent_context_preview", &SessionArgs { session_id }).await
+}
+
+pub async fn get_agent_consent() -> Result<bool, AppError> {
+    invoke_no_args("get_agent_consent").await
+}
+
+pub async fn set_agent_consent(granted: bool) -> Result<(), AppError> {
+    invoke("set_agent_consent", &ConsentArgs { granted }).await
 }
 
 pub async fn confirm_agent_command(

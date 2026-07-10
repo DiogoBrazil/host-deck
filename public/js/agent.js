@@ -11,9 +11,19 @@ const core = () => window.__TAURI__.core;
  * @param {string} providerId provider record id
  * @param {string|null} model model override (null uses the provider default)
  * @param {string} message user message
+ * @param {number|null} temperature only when the model announces support
+ * @param {boolean} thinking extended reasoning, capability-gated by the UI
  * @param {(eventJson:string)=>void} onEvent receives each AgentEvent as JSON
  */
-export function agentSend(sessionId, providerId, model, message, onEvent) {
+export function agentSend(
+  sessionId,
+  providerId,
+  model,
+  message,
+  temperature,
+  thinking,
+  onEvent,
+) {
   const channel = new (core().Channel)();
   channel.onmessage = (msg) => onEvent(JSON.stringify(msg));
   return core().invoke("agent_send", {
@@ -21,6 +31,8 @@ export function agentSend(sessionId, providerId, model, message, onEvent) {
     providerId,
     model,
     message,
+    temperature,
+    thinking,
     onEvent: channel,
   });
 }

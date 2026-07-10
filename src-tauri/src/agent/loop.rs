@@ -19,6 +19,8 @@ pub struct LoopConfig {
     pub system: Option<String>,
     pub max_tokens: u32,
     pub max_turns: usize,
+    pub temperature: Option<f64>,
+    pub thinking: bool,
 }
 
 /// Como o laço terminou. Cancelamento não é erro: o histórico fica
@@ -53,6 +55,8 @@ pub async fn run_loop(
             messages: history.clone(),
             tools: tools.specs(),
             max_tokens: config.max_tokens,
+            temperature: config.temperature,
+            thinking: config.thinking,
         };
 
         let sink = |delta| events(AgentEvent::Delta(delta));
@@ -180,6 +184,8 @@ mod tests {
             system: Some("system".into()),
             max_tokens: 1024,
             max_turns: MAX_TURNS,
+            temperature: None,
+            thinking: false,
         }
     }
 
