@@ -5,6 +5,7 @@ use tauri::ipc::Channel;
 use tokio::sync::{mpsc, oneshot};
 use zeroize::Zeroizing;
 
+use crate::agent::registry::AgentRegistry;
 use crate::error::{AppError, AppResult};
 use crate::infra::db::Db;
 use crate::infra::sqlite_repository as repo;
@@ -24,6 +25,7 @@ pub async fn ssh_connect(
     db: State<'_, Db>,
     store: State<'_, CredStore>,
     registry: State<'_, SessionRegistry>,
+    agents: State<'_, AgentRegistry>,
     session_id: String,
     connection_id: String,
     cols: u32,
@@ -40,6 +42,7 @@ pub async fn ssh_connect(
     start_session(
         &db,
         &registry,
+        &agents,
         session_id,
         &connection_id,
         ConnectParams {
@@ -61,6 +64,7 @@ pub async fn ssh_connect(
 pub async fn ssh_connect_with_password(
     db: State<'_, Db>,
     registry: State<'_, SessionRegistry>,
+    agents: State<'_, AgentRegistry>,
     session_id: String,
     connection_id: String,
     password: String,
@@ -76,6 +80,7 @@ pub async fn ssh_connect_with_password(
     start_session(
         &db,
         &registry,
+        &agents,
         session_id,
         &connection_id,
         ConnectParams {
@@ -158,6 +163,7 @@ pub async fn confirm_host_key(
 async fn start_session(
     db: &Db,
     registry: &SessionRegistry,
+    agents: &AgentRegistry,
     session_id: String,
     connection_id: &str,
     params: ConnectParams,
@@ -202,6 +208,7 @@ async fn start_session(
 
         let sid = session_id.clone();
         let registry_for_cleanup = registry.clone();
+        let agents_for_cleanup = agents.clone();
         open_shell_and_bridge(
             &handle,
             cols,
@@ -211,6 +218,9 @@ async fn start_session(
             input_rx,
             move || {
                 registry_for_cleanup.remove(&sid);
+                // A conversa do agente morre com a sessão; cancela o turno
+                // e as confirmações pendentes que ainda existirem.
+                agents_for_cleanup.remove(&sid);
             },
         )
         .await?;

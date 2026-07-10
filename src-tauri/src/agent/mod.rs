@@ -1,17 +1,19 @@
-//! Agente de IA: abstração de provedor (Fase 1).
+//! Agente de IA: abstração de provedor (Fase 1) e laço agêntico (Fase 2).
 //!
-//! O laço agêntico (Fase 2) fala apenas o dialeto interno de `domain`;
-//! cada adapter em `providers` traduz de/para o formato do provedor.
-
-// O consumidor deste módulo é o laço agêntico da Fase 2; até ele existir,
-// tudo aqui parece morto para o compilador. Remover quando a Fase 2 chegar.
-#![allow(dead_code)]
+//! O laço em `r#loop` fala apenas o dialeto interno de `domain`; cada
+//! adapter em `providers` traduz de/para o formato do provedor. As
+//! ferramentas em `tools` executam contra a sessão SSH do usuário.
 
 pub mod domain;
+pub mod events;
+pub mod r#loop;
 pub mod models;
+pub mod policy;
 pub mod provider;
 pub mod providers;
+pub mod registry;
 mod sse;
+pub mod tools;
 
 use crate::domain::{AgentProvider as ProviderRecord, ProviderKind};
 use provider::AgentProvider;

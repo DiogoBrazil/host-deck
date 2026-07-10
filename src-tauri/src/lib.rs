@@ -11,7 +11,8 @@ use std::sync::Arc;
 
 use tauri::Manager;
 
-use commands::{connection_commands, sftp_commands, terminal_commands};
+use agent::registry::AgentRegistry;
+use commands::{agent_commands, connection_commands, sftp_commands, terminal_commands};
 use infra::credential_store::SystemKeyring;
 use infra::db::Db;
 use sftp::registry::SftpRegistry;
@@ -37,6 +38,7 @@ pub fn run() {
             app.manage(CredStore(Arc::new(SystemKeyring::new())));
             app.manage(SessionRegistry::default());
             app.manage(SftpRegistry::default());
+            app.manage(AgentRegistry::default());
 
             Ok(())
         })
@@ -64,6 +66,10 @@ pub fn run() {
             sftp_commands::sftp_remove_dir,
             sftp_commands::sftp_cancel_transfer,
             sftp_commands::sftp_disconnect,
+            agent_commands::agent_send,
+            agent_commands::agent_cancel,
+            agent_commands::confirm_agent_command,
+            agent_commands::agent_refresh_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

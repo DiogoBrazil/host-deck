@@ -79,6 +79,8 @@ impl TurnOutcome {
         }
     }
 
+    /// Acesso uniforme ao turno; hoje só os testes precisam dele.
+    #[allow(dead_code)]
     pub fn turn(&self) -> &AgentTurn {
         match self {
             TurnOutcome::Text(t) | TurnOutcome::ToolCalls(t) => t,
