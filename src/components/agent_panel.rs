@@ -40,11 +40,23 @@ fn tool_label(name: &str, arguments: &serde_json::Value) -> String {
     }
 }
 
+/// Tamanho atual da viewport, para posicionar e limitar o painel flutuante.
+fn viewport_size() -> (f64, f64) {
+    let win = web_sys::window().expect("window");
+    let w = win.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1280.0);
+    let h = win.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(800.0);
+    (w, h)
+}
+
 /// Chat do agente de IA, ancorado à sessão SSH do terminal ao lado.
+/// `floating` alterna entre encaixado no terminal e janela flutuante;
+/// `position` guarda o canto superior esquerdo no modo flutuante.
 #[component]
 pub fn AgentPanel(
     connection: SshConnection,
     session_id: Signal<Option<String>>,
+    floating: RwSignal<bool>,
+    position: RwSignal<Option<(f64, f64)>>,
     on_close: Callback<()>,
 ) -> impl IntoView {
     let providers = RwSignal::new(Vec::<AgentProvider>::new());
@@ -353,9 +365,71 @@ pub fn AgentPanel(
         }
     });
 
+    // Arrasto do painel flutuante pelo cabeçalho; o pointer capture mantém o
+    // movimento mesmo quando o cursor sai do cabeçalho.
+    let header_ref = NodeRef::<leptos::html::Div>::new();
+    let drag_offset = StoredValue::new(Option::<(f64, f64)>::None);
+
+    let drag_start = move |ev: leptos::ev::PointerEvent| {
+        if !floating.get() {
+            return;
+        }
+        // Cliques nos controles do cabeçalho não iniciam arrasto.
+        let interactive = ev
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+            .and_then(|el| el.closest("button, select, input, textarea").ok().flatten())
+            .is_some();
+        if interactive {
+            return;
+        }
+        let Some((x, y)) = position.get() else { return };
+        drag_offset.set_value(Some((ev.client_x() as f64 - x, ev.client_y() as f64 - y)));
+        if let Some(el) = header_ref.get() {
+            let _ = el.set_pointer_capture(ev.pointer_id());
+        }
+    };
+    let drag_move = move |ev: leptos::ev::PointerEvent| {
+        let Some((dx, dy)) = drag_offset.get_value() else {
+            return;
+        };
+        let (vw, vh) = viewport_size();
+        // Deixa sempre uma faixa do cabeçalho visível para poder rearrastar.
+        let x = (ev.client_x() as f64 - dx).clamp(0.0, (vw - 120.0).max(0.0));
+        let y = (ev.client_y() as f64 - dy).clamp(0.0, (vh - 48.0).max(0.0));
+        position.set(Some((x, y)));
+    };
+    let drag_end = move |_ev: leptos::ev::PointerEvent| drag_offset.set_value(None);
+
+    let toggle_float = move |_| {
+        if !floating.get() && position.get().is_none() {
+            // Primeira vez destacado: encosta no canto superior direito.
+            let (vw, _) = viewport_size();
+            position.set(Some(((vw - 440.0).max(16.0), 72.0)));
+        }
+        floating.update(|f| *f = !*f);
+    };
+
     view! {
-        <div class="agent-panel">
-            <div class="agent-header">
+        <div
+            class="agent-panel"
+            class:floating=move || floating.get()
+            style=move || {
+                floating
+                    .get()
+                    .then(|| position.get())
+                    .flatten()
+                    .map(|(x, y)| format!("left: {x}px; top: {y}px;"))
+            }
+        >
+            <div
+                class="agent-header"
+                node_ref=header_ref
+                on:pointerdown=drag_start
+                on:pointermove=drag_move
+                on:pointerup=drag_end
+                on:pointercancel=drag_end
+            >
                 <span class="agent-title">"Agente"</span>
                 <select
                     class="agent-select"
@@ -407,6 +481,15 @@ pub fn AgentPanel(
                             .collect_view()
                     }}
                 </select>
+                <button
+                    class="icon-btn"
+                    title=move || {
+                        if floating.get() { "Encaixar no terminal" } else { "Destacar do terminal" }
+                    }
+                    on:click=toggle_float
+                >
+                    {move || if floating.get() { "⇥" } else { "⧉" }}
+                </button>
                 <button class="icon-btn" title="Fechar painel" on:click=move |_| on_close.run(())>
                     "✕"
                 </button>

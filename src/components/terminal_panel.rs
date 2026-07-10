@@ -28,6 +28,10 @@ pub fn TerminalPanel(
     // do agente endereça a sessão por ele.
     let session_id = RwSignal::new(Option::<String>::None);
     let agent_open = RwSignal::new(false);
+    // O modo flutuante e a posição vivem aqui para sobreviver ao fechar e
+    // reabrir do painel do agente dentro da mesma sessão.
+    let agent_floating = RwSignal::new(false);
+    let agent_position = RwSignal::new(Option::<(f64, f64)>::None);
 
     let conn_id = connection.id.clone();
     let container_id = format!("terminal-container-{instance_id}");
@@ -157,6 +161,8 @@ pub fn TerminalPanel(
                                 <AgentPanel
                                     connection=agent_connection.get_value()
                                     session_id=session_id.into()
+                                    floating=agent_floating
+                                    position=agent_position
                                     on_close=Callback::new(move |_| agent_open.set(false))
                                 />
                             }

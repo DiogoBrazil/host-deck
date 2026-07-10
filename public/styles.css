@@ -661,6 +661,34 @@ button {
   border-left: 1px solid var(--border);
 }
 
+/* Destacado do terminal: janela flutuante arrastável pelo cabeçalho e
+   redimensionável pelo canto inferior direito. Fica abaixo dos modais (100). */
+.agent-panel.floating {
+  position: fixed;
+  z-index: 40;
+  width: 400px;
+  height: min(560px, calc(100vh - 96px));
+  min-width: 320px;
+  min-height: 260px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  resize: both;
+  overflow: hidden;
+}
+
+.agent-panel.floating .agent-header {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.agent-panel.floating .agent-header:active {
+  cursor: grabbing;
+}
+
 .agent-header {
   display: flex;
   align-items: center;
