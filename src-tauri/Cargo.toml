@@ -1,6 +1,6 @@
 [package]
 name = "host-deck"
-version = "0.1.0"
+version = "0.1.1"
 description = "HostDeck — gerenciador de conexões SSH com terminal embutido"
 authors = ["Diogo"]
 edition = "2021"

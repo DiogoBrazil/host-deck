@@ -1,4 +1,6 @@
 {
-  "latest": "0.1.0",
-  "releases": []
+  "latest": "0.1.1",
+  "releases": [
+    { "version": "0.1.1", "tag": "v0.1.1", "date": "2026-07-10T19:27:45Z" }
+  ]
 }
