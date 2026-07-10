@@ -1,10 +1,10 @@
 # HostDeck
 
 HostDeck é um cliente desktop para gerenciar conexões SSH, abrir terminais
-interativos embutidos e transferir arquivos por SFTP. O projeto foi construído
-com **Tauri v2 + Rust + Leptos (WASM)**, usa `russh` para falar SSH nativamente,
-`rusqlite` para persistência local e o keyring do sistema para armazenar
-segredos.
+interativos embutidos, transferir arquivos por SFTP e operar o servidor com um
+agente de IA integrado à sessão. O projeto foi construído com **Tauri v2 +
+Rust + Leptos (WASM)**, usa `russh` para falar SSH nativamente, `rusqlite`
+para persistência local e o keyring do sistema para armazenar segredos.
 
 O objetivo é oferecer uma alternativa simples e segura para organizar hosts,
 credenciais e sessões de terminal sem depender de shell local, concatenação de
@@ -46,6 +46,19 @@ Escolha o arquivo conforme o seu sistema:
 - Bloqueio de conexão quando a host key conhecida muda.
 - Armazenamento seguro de senha/passphrase no keyring do sistema.
 - SQLite local contendo apenas metadados e referências para os segredos.
+- Agente de IA por sessão, em painel encaixado no terminal ou flutuante
+  (arrastável), com streaming token a token.
+- Provedores de IA configuráveis: Anthropic, OpenAI e OpenRouter, com
+  `base_url` opcional para gateways compatíveis.
+- Chave de API no keyring do sistema; listagem de modelos com cache local e
+  controles de temperatura/raciocínio estendido derivados das capacidades
+  anunciadas pelo modelo.
+- Ferramentas do agente executadas na sessão SSH: comando via canal `exec`,
+  leitura de arquivo via SFTP e digitação no terminal interativo.
+- Política de execução conservadora: só comandos comprovadamente de leitura
+  rodam sozinhos; todo o resto exige confirmação do usuário.
+- Contexto do terminal enviado ao provedor apenas com consentimento explícito,
+  com preview exato, remoção de ANSI e redação de segredos.
 
 ## Stack Técnica
 
@@ -61,6 +74,9 @@ Escolha o arquivo conforme o seu sistema:
 - **keyring**: Secret Service, Keychain ou Credential Manager.
 - **tokio**: tarefas assíncronas, canais e rede.
 - **zeroize**: limpeza de buffers sensíveis em memória.
+- **reqwest** (rustls): chamadas HTTP com streaming SSE para os provedores de IA.
+- **regex-lite**: redação de segredos no contexto enviado ao agente.
+- **async-trait**: traits assíncronas do provedor e do executor de ferramentas.
 
 ## Arquitetura
 
@@ -69,10 +85,11 @@ Leptos (WASM)
   -> wasm-bindgen
   -> public/js/terminal.js + xterm.js
   -> public/js/sftp.js + src/sftp_api.rs
+  -> public/js/agent.js + src/components/agent_panel.rs
   -> Tauri IPC (invoke + Channel)
   -> Rust backend
-  -> russh / russh-sftp
-  -> servidor SSH
+  -> russh / russh-sftp -> servidor SSH
+  -> reqwest (SSE) -> provedor de IA (Anthropic / OpenAI / OpenRouter)
 ```
 
 O frontend vive em `src/` e compila para WASM. Ele chama comandos Tauri por
@@ -86,32 +103,43 @@ O navegador SFTP usa `public/js/sftp.js` para o ciclo de vida da sessão, evento
 e diálogos nativos de arquivo. As operações de diretório e transferência são
 chamadas pelo wrapper tipado em `src/sftp_api.rs`.
 
-O backend vive em `src-tauri/src/`. Ele registra o SQLite, o keyring e o
-registry de sessões como estado Tauri, expõe comandos IPC e mantém as sessões
-SSH e SFTP ativas.
+O backend vive em `src-tauri/src/`. Ele registra o SQLite, o keyring e os
+registries de sessões (SSH, SFTP e agente) como estado Tauri, expõe comandos
+IPC e mantém as sessões ativas.
+
+O agente de IA vive em `src-tauri/src/agent/`. O laço agêntico (`loop.rs`)
+fala apenas um dialeto interno de mensagens e ferramentas; os adapters em
+`providers/` traduzem de/para o wire format da Anthropic e da API compatível
+com OpenAI (usada também pelo OpenRouter). As ferramentas executam contra a
+sessão SSH ativa e os eventos do turno chegam à UI por `tauri::ipc::Channel`.
 
 ## Estrutura do Repositório
 
 ```text
 .
 ├── src/                         # Frontend Leptos/WASM
-│   ├── api.rs                   # Wrapper das chamadas IPC de CRUD
+│   ├── api.rs                   # Wrapper das chamadas IPC de CRUD, agente e provedores
 │   ├── sftp_api.rs              # Wrapper das chamadas IPC de SFTP
-│   ├── bindings/                # Bindings Tauri, terminal JS e SFTP JS
-│   ├── components/              # Layout, lista, formulário, terminal e SFTP
+│   ├── bindings/                # Bindings Tauri, terminal JS, SFTP JS e agente
+│   ├── components/              # Layout, lista, formulário, terminal, SFTP,
+│   │                            # painel do agente e configuração de provedores
 │   └── models.rs                # Tipos espelhados do backend
 ├── public/
 │   ├── js/terminal.js           # Integração xterm.js <-> Tauri
 │   ├── js/sftp.js               # Integração SFTP <-> Tauri e diálogos nativos
+│   ├── js/agent.js              # Glue do canal de eventos do agente
 │   ├── styles.css               # Estilos da UI
 │   └── vendor/xterm/            # Assets vendorizados do xterm.js
 ├── src-tauri/
 │   ├── migrations/              # Migrations SQLite
 │   ├── src/
-│   │   ├── commands/            # Commands Tauri
+│   │   ├── agent/               # Laço agêntico, adapters de provedor,
+│   │   │                        # ferramentas, política, redação e eventos
+│   │   ├── commands/            # Commands Tauri (conexões, SSH, SFTP,
+│   │   │                        # agente e provedores)
 │   │   ├── domain/              # Tipos e validação de domínio
-│   │   ├── infra/               # SQLite e keyring
-│   │   ├── ssh/                 # Cliente SSH, TOFU, sessões e eventos
+│   │   ├── infra/               # SQLite, keyring e app_settings
+│   │   ├── ssh/                 # Cliente SSH, TOFU, sessões, scrollback e eventos
 │   │   ├── sftp/                # Cliente SFTP, sessões e transferências
 │   │   ├── error.rs             # Erros serializados para o frontend
 │   │   ├── lib.rs               # Setup Tauri e registro de commands
@@ -227,6 +255,62 @@ HostDeck usa TOFU (trust on first use):
 Esse comportamento protege contra mudanças inesperadas de host key, incluindo
 possíveis ataques man-in-the-middle.
 
+### Agente de IA na sessão
+
+Cada sessão de terminal pode abrir um painel de agente, encaixado ao lado do
+terminal ou destacado como janela flutuante arrastável. O usuário escolhe o
+provedor e o modelo, ajusta temperatura e raciocínio estendido quando o modelo
+anuncia suporte (a UI deriva os controles das `capabilities` do cache de
+modelos, nunca de uma lista fixa) e conversa com o modelo sobre o servidor da
+sessão.
+
+Antes de configurar, é preciso cadastrar um provedor na tela de configuração:
+Anthropic, OpenAI ou OpenRouter, com `base_url` opcional para gateways
+compatíveis. A chave de API segue o mesmo tratamento das credenciais SSH: vai
+para o keyring do sistema e o SQLite guarda apenas a referência. Cada conexão
+pode ainda ter um provedor padrão associado.
+
+Um turno do agente funciona assim:
+
+1. o frontend chama `agent_send`; o backend valida o consentimento e a sessão;
+2. a cauda do scrollback (mantido no backend, ~200 KB por sessão) entra no
+   system prompt — últimos 24 KB, sem sequências ANSI e com segredos
+   redigidos;
+3. o laço agêntico chama o provedor em streaming e repassa texto/pensamento
+   token a token pelo `tauri::ipc::Channel`;
+4. quando o modelo pede uma ferramenta, ela é executada e o resultado volta ao
+   modelo no turno seguinte, até a resposta final (com teto de 16 turnos);
+5. o usuário pode cancelar o turno a qualquer momento; confirmações pendentes
+   são recusadas.
+
+O agente dispõe de três ferramentas, em canais deliberadamente distintos:
+
+- `run_command`: executa um comando em um canal `exec` novo da mesma conexão
+  SSH (terminal limpo), com timeout e saída limitada;
+- `read_remote_file`: lê um arquivo remoto por SFTP;
+- `type_into_terminal`: digita no shell interativo do usuário (o `cd` dele, as
+  variáveis dele, o `sudo` já autenticado) — sempre confirmado.
+
+A política de execução é conservadora por desenho: uma allowlist curta de
+comandos comprovadamente de leitura (`ls`, `cat`, `df`, `ps`, ...) roda sem
+perguntar; qualquer outro comando — e qualquer comando com metacaracteres de
+shell (pipes, redirecionamento, `$(...)`) — aguarda confirmação do usuário na
+UI. Não há tentativa de detectar "comandos perigosos": o usuário é quem
+decide.
+
+### Consentimento e redação de segredos
+
+O conteúdo do terminal só sai da máquina depois de um consentimento explícito,
+persistido em `app_settings` e revogável. O pedido de consentimento mostra um
+preview com exatamente o texto que iria ao provedor — a mesma função gera o
+preview e o system prompt.
+
+Antes do envio, padrões óbvios de segredo são substituídos por `[REDACTED]`:
+blocos PEM de chave privada, cabeçalhos `Authorization`, atribuições
+`SENHA=...`/`TOKEN: ...` e tokens reconhecíveis por prefixo (OpenAI/Anthropic
+`sk-*`, GitHub, GitLab, Slack, AWS, Google, JWTs). A redação é melhor-esforço
+por definição — por isso ela complementa, e não substitui, o consentimento.
+
 ## Modelo de Dados
 
 As migrations ficam em `src-tauri/migrations/` e são aplicadas por
@@ -249,6 +333,7 @@ Guarda os metadados das conexões:
 - `notes`;
 - `password_secret_key`;
 - `key_passphrase_secret_key`;
+- `provider_id` (provedor de IA padrão da conexão, opcional);
 - `last_connected_at`;
 - `created_at`;
 - `updated_at`.
@@ -266,6 +351,30 @@ Guarda as host keys confiadas por TOFU:
 - `added_at`.
 
 A combinação `(host, port, key_type)` é única.
+
+### `agent_providers`
+
+Guarda os provedores de IA cadastrados:
+
+- `id`;
+- `kind` (`anthropic`, `openai` ou `openrouter`);
+- `label`;
+- `base_url` (opcional, para gateways compatíveis);
+- `model` (modelo padrão do provedor);
+- `api_key_ref` (referência para o keyring — nunca a chave em si);
+- `created_at`.
+
+### `agent_model_cache`
+
+Cache da listagem de modelos por provedor (`GET /models`): id, nome de
+exibição, limites de tokens e a árvore de `capabilities` em JSON. A chave
+primária é `(provider_id, model_id)` e remover o provedor apaga o cache em
+cascata.
+
+### `app_settings`
+
+Chave/valor genérico para flags do app. Primeiro consumidor: o consentimento
+de envio do terminal ao provedor de IA (`agent_terminal_consent`).
 
 ## Commands Tauri
 
@@ -299,6 +408,32 @@ e o TOFU.
 - `sftp_cancel_transfer`: cancela uma transferência em andamento.
 - `sftp_disconnect`: encerra a sessão SFTP.
 
+### Agente de IA
+
+- `agent_send`: inicia um turno do agente; retorna imediatamente e transmite
+  os eventos (tokens, pedidos de ferramenta, confirmações, desfecho) por
+  `tauri::ipc::Channel`.
+- `agent_cancel`: cancela o turno em andamento.
+- `confirm_agent_command`: responde à confirmação de um comando proposto
+  (espelha o fluxo do `confirm_host_key`).
+- `agent_refresh_models`: busca a listagem de modelos no provedor e substitui
+  o cache persistido.
+- `agent_context_preview`: retorna o texto exatamente como iria ao provedor
+  (cauda do scrollback, sem ANSI, com segredos redigidos).
+- `get_agent_consent` / `set_agent_consent`: consulta e registra (ou revoga) o
+  consentimento de envio do terminal.
+
+### Provedores de IA
+
+- `list_providers`: lista os provedores cadastrados.
+- `create_provider` / `update_provider`: validam, persistem metadados e salvam
+  a chave de API no keyring.
+- `delete_provider`: remove o provedor, sua chave no keyring e o cache de
+  modelos; conexões que o usavam ficam sem provedor.
+- `list_cached_models`: modelos do cache persistido, sem rede.
+- `set_connection_provider`: associa (ou remove) o provedor padrão de uma
+  conexão.
+
 ## Segurança
 
 - Segredos não são gravados no SQLite.
@@ -311,6 +446,12 @@ e o TOFU.
   necessários para abrir/salvar arquivos.
 - Mudança de host key bloqueia a conexão.
 - Excluir conexão remove referências correspondentes no keyring.
+- Chaves de API dos provedores de IA ficam no keyring; o SQLite guarda apenas
+  a referência, sem fallback para o banco.
+- O contexto do terminal só é enviado ao provedor com consentimento explícito
+  do usuário, com preview exato e redação de segredos melhor-esforço.
+- Comandos propostos pelo agente só executam sem confirmação quando estão na
+  allowlist de leitura e não contêm metacaracteres de shell.
 
 ## Desenvolvimento Local
 
@@ -338,6 +479,14 @@ cargo tauri dev
 
 O Tauri executa `trunk serve` como `beforeDevCommand` e espera o frontend em
 `http://localhost:1420`.
+
+No Windows sem NASM instalado, o build do `aws-lc-rs` (puxado por `russh` e
+pelo TLS do `reqwest`) falha. Use os artefatos pré-compilados:
+
+```powershell
+$env:AWS_LC_SYS_PREBUILT_NASM = "1"
+cargo tauri dev
+```
 
 Gerar build:
 
@@ -476,6 +625,10 @@ Verifique:
   terminal.
 - A remoção de diretórios via SFTP é para pastas vazias; não há remoção
   recursiva documentada na UI.
+- O agente de IA requer uma sessão de terminal ativa; não há modo standalone.
+- O histórico da conversa do agente vive em memória por sessão; não é
+  persistido entre reinícios do app.
+- A allowlist de comandos de leitura do agente é fixa, não configurável.
 
 ## Convenções de Manutenção
 
